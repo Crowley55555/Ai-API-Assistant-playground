@@ -1,0 +1,435 @@
+{% extends 'base.html' %}
+{% load model_tags %}
+
+{% block title %}{{ agent.name }} - AI Playground{% endblock %}
+
+{% block content %}
+<div class="container-fluid h-100" x-data="agentApp()">
+    <div class="row h-100">
+        <!-- Agent Settings Panel -->
+        <div class="col-md-4 col-lg-3 settings-panel p-3">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="mb-0">
+                    <i class="bi bi-robot"></i> {{ agent.name }}
+                </h5>
+                <a href="{% url 'chat:agents_list' %}" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-arrow-left"></i>
+                </a>
+            </div>
+            
+            {% if agent.description %}
+                <div class="mb-3">
+                    <p class="text-muted small">{{ agent.description }}</p>
+                </div>
+            {% endif %}
+            
+            <!-- Model Info -->
+            <div class="mb-3">
+                <label class="form-label">Модель ИИ</label>
+                <div class="input-group">
+                    <span class="form-control bg-light">{{ agent.model }}</span>
+                    <button class="btn btn-outline-secondary" type="button" @click="editSettings = !editSettings">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Editable Settings -->
+            <div x-show="editSettings">
+                <div class="mb-3">
+                    <label for="agentName" class="form-label">Название</label>
+                    <input type="text" class="form-control" id="agentName" 
+                           x-model="agentSettings.name">
+                </div>
+                
+                <div class="mb-3">
+                    <label for="agentDescription" class="form-label">Описание</label>
+                    <textarea class="form-control" id="agentDescription" rows="2" 
+                              x-model="agentSettings.description"></textarea>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="agentModel" class="form-label">Модель</label>
+                    <select class="form-select" id="agentModel" x-model="agentSettings.model">
+                        {% model_options %}
+                    </select>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="agentTemperature" class="form-label">
+                        Температура: <span x-text="agentSettings.temperature"></span>
+                    </label>
+                    <input type="range" class="form-range" id="agentTemperature" 
+                           min="0" max="2" step="0.1" x-model="agentSettings.temperature">
+                </div>
+                
+                <div class="mb-3">
+                    <label for="agentTopP" class="form-label">Top P</label>
+                    <input type="number" class="form-control" id="agentTopP" 
+                           min="0" max="1" step="0.1" x-model="agentSettings.top_p">
+                </div>
+                
+                <div class="mb-3">
+                    <label for="agentSystemPrompt" class="form-label">Системный промпт</label>
+                    <textarea class="form-control" id="agentSystemPrompt" rows="4" 
+                              x-model="agentSettings.system_prompt"></textarea>
+                </div>
+                
+                <div class="d-flex gap-2">
+                    <button class="btn btn-primary btn-sm" @click="saveSettings()" :disabled="isSaving">
+                        <span x-show="!isSaving">Сохранить</span>
+                        <span x-show="isSaving" class="spinner-border spinner-border-sm"></span>
+                    </button>
+                    <button class="btn btn-secondary btn-sm" @click="cancelEdit()">Отмена</button>
+                </div>
+            </div>
+            
+            <!-- Read-only Settings -->
+            <div x-show="!editSettings">
+                <div class="mb-3">
+                    <label class="form-label">Температура</label>
+                    <div class="input-group">
+                        <span class="form-control bg-light">{{ agent.temperature }}</span>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">Top P</label>
+                    <div class="input-group">
+                        <span class="form-control bg-light">{{ agent.top_p }}</span>
+                    </div>
+                </div>
+                
+                {% if agent.system_prompt %}
+                    <div class="mb-3">
+                        <label class="form-label">Системный промпт</label>
+                        <div class="bg-light p-2 rounded small" style="max-height: 100px; overflow-y: auto;">
+                            {{ agent.system_prompt }}
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+            
+            <!-- Agent Stats -->
+            <div class="mb-3">
+                <label class="form-label">Статистика агента</label>
+                {% with stats=agent.get_total_stats %}
+                    <div class="row text-center">
+                        <div class="col-6">
+                            <small class="text-muted">Сессий</small>
+                            <div class="fw-bold text-info">{{ stats.total_sessions }}</div>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted">Сообщений</small>
+                            <div class="fw-bold text-success">{{ stats.total_messages }}</div>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted">Токенов</small>
+                            <div class="fw-bold text-warning">{{ stats.total_tokens }}</div>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted">Стоимость</small>
+                            <div class="fw-bold text-danger">${{ stats.total_cost|floatformat:4 }}</div>
+                        </div>
+                    </div>
+                {% endwith %}
+            </div>
+            
+            <!-- Actions -->
+            <div class="mb-3">
+                <button type="button" class="btn btn-success w-100 mb-2" @click="newSession()">
+                    <i class="bi bi-plus-circle"></i> Новая сессия
+                </button>
+                <button type="button" class="btn btn-outline-danger w-100" @click="deleteAgent()">
+                    <i class="bi bi-trash"></i> Удалить агента
+                </button>
+            </div>
+        </div>
+        
+        <!-- Chat Area -->
+        <div class="col-md-8 col-lg-9 d-flex flex-column">
+            <!-- Chat Header -->
+            <div class="d-flex justify-content-between align-items-center p-3 border-bottom">
+                <h5 class="mb-0">
+                    <i class="bi bi-chat-dots"></i> Чат с {{ agent.name }}
+                </h5>
+                <div>
+                    <span class="badge bg-primary">{{ agent.model }}</span>
+                    <span class="badge bg-secondary ms-1">T: {{ agent.temperature }}</span>
+                </div>
+            </div>
+            
+            <!-- Token Stats Card -->
+            <div class="p-3 border-bottom" x-show="sessionStats">
+                <div class="card bg-light">
+                    <div class="card-body py-2">
+                        <div class="row text-center">
+                            <div class="col-3">
+                                <small class="text-muted">Входные токены</small>
+                                <div class="fw-bold text-primary" x-text="sessionStats?.total_input_tokens || 0"></div>
+                            </div>
+                            <div class="col-3">
+                                <small class="text-muted">Выходные токены</small>
+                                <div class="fw-bold text-success" x-text="sessionStats?.total_output_tokens || 0"></div>
+                            </div>
+                            <div class="col-3">
+                                <small class="text-muted">Всего токенов</small>
+                                <div class="fw-bold text-info" x-text="sessionStats?.total_tokens || 0"></div>
+                            </div>
+                            <div class="col-3">
+                                <small class="text-muted">Стоимость</small>
+                                <div class="fw-bold text-warning" x-text="'$' + (sessionStats?.total_estimated_cost?.toFixed(6) || '0.000000')"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Chat Container -->
+            <div class="chat-container flex-grow-1 p-3">
+                <div id="chatMessages" class="mb-3">
+                    {% for message in messages %}
+                        <div class="mb-3">
+                            <div class="message-bubble p-3 rounded {% if message.role == 'user' %}user-message{% else %}assistant-message{% endif %}">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <strong>{% if message.role == 'user' %}Вы{% else %}Ассистент{% endif %}</strong>
+                                    <small class="text-muted">{{ message.timestamp|date:"H:i" }}</small>
+                                </div>
+                                <div>{{ message.content|linebreaks }}</div>
+                                
+                                {% if message.role == 'assistant' and message.input_tokens %}
+                                    <div class="mt-2 pt-2 border-top border-light">
+                                        <div class="row text-center small">
+                                            <div class="col-3">
+                                                <span class="text-muted">Вход:</span>
+                                                <div class="fw-bold text-primary">{{ message.input_tokens }}</div>
+                                            </div>
+                                            <div class="col-3">
+                                                <span class="text-muted">Выход:</span>
+                                                <div class="fw-bold text-success">{{ message.output_tokens }}</div>
+                                            </div>
+                                            <div class="col-3">
+                                                <span class="text-muted">Всего:</span>
+                                                <div class="fw-bold text-info">{{ message.total_tokens }}</div>
+                                            </div>
+                                            <div class="col-3">
+                                                <span class="text-muted">Стоимость:</span>
+                                                <div class="fw-bold text-warning">${{ message.estimated_cost|floatformat:6 }}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+                
+                <!-- Message Input -->
+                <div class="input-group">
+                    <textarea class="form-control" rows="3" 
+                              x-model="currentMessage" 
+                              @keydown.enter.prevent="sendMessage()"
+                              placeholder="Введите ваше сообщение..."></textarea>
+                    <button class="btn btn-primary" type="button" 
+                            @click="sendMessage()" 
+                            :disabled="!currentMessage.trim() || isLoading">
+                        <i class="bi bi-send" x-show="!isLoading"></i>
+                        <span class="spinner-border spinner-border-sm" x-show="isLoading"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function agentApp() {
+    return {
+        agentId: '{{ agent.id }}',
+        sessionId: '{{ session.session_id }}',
+        messages: [],
+        currentMessage: '',
+        isLoading: false,
+        sessionStats: null,
+        editSettings: false,
+        isSaving: false,
+        agentSettings: {
+            name: '{{ agent.name }}',
+            description: '{{ agent.description }}',
+            model: '{{ agent.model }}',
+            temperature: {{ agent.temperature }},
+            top_p: {{ agent.top_p }},
+            system_prompt: `{{ agent.system_prompt|escapejs }}`
+        },
+        
+        init() {
+            this.loadSessionStats();
+        },
+        
+        async sendMessage() {
+            if (!this.currentMessage.trim() || this.isLoading) return;
+            
+            const message = this.currentMessage.trim();
+            this.currentMessage = '';
+            this.isLoading = true;
+            
+            // Add user message to UI
+            const userMessage = {
+                id: Date.now(),
+                role: 'user',
+                content: message,
+                timestamp: new Date().toISOString()
+            };
+            this.messages.push(userMessage);
+            
+            try {
+                const response = await fetch('/playground/api/send-message/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrftoken
+                    },
+                    body: JSON.stringify({
+                        session_id: this.sessionId,
+                        message: message
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    const assistantMessage = {
+                        id: Date.now() + 1,
+                        role: 'assistant',
+                        content: data.assistant_message.content,
+                        timestamp: data.assistant_message.timestamp,
+                        token_stats: data.assistant_message.token_stats
+                    };
+                    this.messages.push(assistantMessage);
+                    
+                    // Update session stats
+                    if (data.session_stats) {
+                        this.sessionStats = data.session_stats;
+                    }
+                } else {
+                    this.messages.push({
+                        id: Date.now() + 1,
+                        role: 'assistant',
+                        content: 'Ошибка: ' + data.error,
+                        timestamp: new Date().toISOString()
+                    });
+                }
+            } catch (error) {
+                this.messages.push({
+                    id: Date.now() + 1,
+                    role: 'assistant',
+                    content: 'Ошибка соединения: ' + error.message,
+                    timestamp: new Date().toISOString()
+                });
+            } finally {
+                this.isLoading = false;
+                this.scrollToBottom();
+            }
+        },
+        
+        async saveSettings() {
+            this.isSaving = true;
+            try {
+                const response = await fetch(`/playground/api/agents/${this.agentId}/update/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrftoken
+                    },
+                    body: JSON.stringify(this.agentSettings)
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    this.editSettings = false;
+                    location.reload(); // Reload to show updated settings
+                } else {
+                    alert('Ошибка сохранения: ' + data.error);
+                }
+            } catch (error) {
+                alert('Ошибка сохранения: ' + error.message);
+            } finally {
+                this.isSaving = false;
+            }
+        },
+        
+        cancelEdit() {
+            this.editSettings = false;
+            // Reset to original values
+            this.agentSettings = {
+                name: '{{ agent.name }}',
+                description: '{{ agent.description }}',
+                model: '{{ agent.model }}',
+                temperature: {{ agent.temperature }},
+                top_p: {{ agent.top_p }},
+                system_prompt: `{{ agent.system_prompt|escapejs }}`
+            };
+        },
+        
+        async newSession() {
+            try {
+                const response = await fetch(`/playground/api/agents/${this.agentId}/new-session/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': csrftoken
+                    }
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    this.sessionId = data.session.session_id;
+                    this.messages = [];
+                    this.sessionStats = null;
+                    location.reload();
+                } else {
+                    alert('Ошибка создания сессии: ' + data.error);
+                }
+            } catch (error) {
+                alert('Ошибка создания сессии: ' + error.message);
+            }
+        },
+        
+        async deleteAgent() {
+            if (!confirm('Вы уверены, что хотите удалить этого агента?')) return;
+            
+            try {
+                const response = await fetch(`/playground/api/agents/${this.agentId}/delete/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': csrftoken
+                    }
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    window.location.href = '/playground/agents/';
+                } else {
+                    alert('Ошибка удаления агента: ' + data.error);
+                }
+            } catch (error) {
+                alert('Ошибка удаления агента: ' + error.message);
+            }
+        },
+        
+        async loadSessionStats() {
+            // Load session stats if available
+            const session = {{ session.get_token_stats|safe }};
+            this.sessionStats = session;
+        },
+        
+        scrollToBottom() {
+            this.$nextTick(() => {
+                const chatContainer = document.getElementById('chatMessages');
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            });
+        }
+    }
+}
+</script>
+{% endblock %}

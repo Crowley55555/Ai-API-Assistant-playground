@@ -1,0 +1,7 @@
+{% for provider, models in models.items %}
+<optgroup label="{{ provider|title }}">
+    {% for model in models %}
+        <option value="{{ model.value }}">{{ model.label }}</option>
+    {% endfor %}
+</optgroup>
+{% endfor %}

@@ -1,0 +1,283 @@
+{% extends 'base.html' %}
+{% load model_tags %}
+
+{% block title %}Агенты - AI Playground{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4" x-data="agentsApp()">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2>
+                    <i class="bi bi-robot"></i> Мои агенты
+                </h2>
+                <div>
+                    <button class="btn btn-primary" @click="showCreateModal = true">
+                        <i class="bi bi-plus-circle"></i> Создать агента
+                    </button>
+                    <a href="{% url 'chat:playground' %}" class="btn btn-outline-secondary">
+                        <i class="bi bi-chat-dots"></i> Playground
+                    </a>
+                </div>
+            </div>
+            
+            {% if agents %}
+                <div class="row">
+                    {% for agent in agents %}
+                        <div class="col-lg-6 col-xl-4 mb-4">
+                            <div class="card h-100 shadow-sm">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                        <h5 class="card-title mb-0">{{ agent.name }}</h5>
+                                        <span class="badge bg-primary">{{ agent.model }}</span>
+                                    </div>
+                                    
+                                    {% if agent.description %}
+                                        <p class="card-text text-muted small mb-3">
+                                            {{ agent.description|truncatechars:100 }}
+                                        </p>
+                                    {% endif %}
+                                    
+                                    <div class="mb-3">
+                                        <div class="row text-center">
+                                            <div class="col-4">
+                                                <small class="text-muted">Температура</small>
+                                                <div class="fw-bold">{{ agent.temperature }}</div>
+                                            </div>
+                                            <div class="col-4">
+                                                <small class="text-muted">Top P</small>
+                                                <div class="fw-bold">{{ agent.top_p }}</div>
+                                            </div>
+                                            <div class="col-4">
+                                                <small class="text-muted">Создан</small>
+                                                <div class="fw-bold">{{ agent.created_at|date:"d.m" }}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    {% if agent.system_prompt %}
+                                        <div class="mb-3">
+                                            <small class="text-muted">Системный промпт:</small>
+                                            <p class="small bg-light p-2 rounded" style="max-height: 60px; overflow: hidden;">
+                                                {{ agent.system_prompt|truncatechars:100 }}
+                                            </p>
+                                        </div>
+                                    {% endif %}
+                                    
+                                    <div class="mb-3">
+                                        {% with stats=agent.get_total_stats %}
+                                            <div class="row text-center">
+                                                <div class="col-3">
+                                                    <small class="text-muted">Сессий</small>
+                                                    <div class="fw-bold text-info">{{ stats.total_sessions }}</div>
+                                                </div>
+                                                <div class="col-3">
+                                                    <small class="text-muted">Сообщений</small>
+                                                    <div class="fw-bold text-success">{{ stats.total_messages }}</div>
+                                                </div>
+                                                <div class="col-3">
+                                                    <small class="text-muted">Токенов</small>
+                                                    <div class="fw-bold text-warning">{{ stats.total_tokens }}</div>
+                                                </div>
+                                                <div class="col-3">
+                                                    <small class="text-muted">Стоимость</small>
+                                                    <div class="fw-bold text-danger">${{ stats.total_cost|floatformat:4 }}</div>
+                                                </div>
+                                            </div>
+                                        {% endwith %}
+                                    </div>
+                                </div>
+                                
+                                <div class="card-footer bg-transparent">
+                                    <div class="d-flex justify-content-between">
+                                        <a href="{% url 'chat:agent_detail' agent.id %}" 
+                                           class="btn btn-primary btn-sm">
+                                            <i class="bi bi-chat-dots"></i> Открыть
+                                        </a>
+                                        <div class="btn-group btn-group-sm">
+                                            <button type="button" class="btn btn-outline-secondary" 
+                                                    @click="editAgent('{{ agent.id }}')">
+                                                <i class="bi bi-pencil"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-outline-danger" 
+                                                    @click="deleteAgent('{{ agent.id }}')">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="text-center py-5">
+                    <i class="bi bi-robot display-1 text-muted"></i>
+                    <h4 class="text-muted mt-3">Агентов пока нет</h4>
+                    <p class="text-muted">Создайте своего первого агента для начала работы</p>
+                    <button class="btn btn-primary" @click="showCreateModal = true">
+                        <i class="bi bi-plus-circle"></i> Создать агента
+                    </button>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Create Agent Modal -->
+    <div class="modal fade" :class="{ 'show': showCreateModal }" 
+         :style="{ 'display': showCreateModal ? 'block' : 'none' }" 
+         tabindex="-1" x-show="showCreateModal">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Создать агента</h5>
+                    <button type="button" class="btn-close" @click="showCreateModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <form @submit.prevent="createAgent()">
+                        <div class="mb-3">
+                            <label for="agentName" class="form-label">Название агента</label>
+                            <input type="text" class="form-control" id="agentName" 
+                                   x-model="newAgent.name" required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="agentDescription" class="form-label">Описание</label>
+                            <textarea class="form-control" id="agentDescription" rows="2" 
+                                      x-model="newAgent.description"></textarea>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="agentModel" class="form-label">Модель ИИ</label>
+                                    <select class="form-select" id="agentModel" x-model="newAgent.model">
+                                        {% model_options %}
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="mb-3">
+                                    <label for="agentTemperature" class="form-label">Температура</label>
+                                    <input type="number" class="form-control" id="agentTemperature" 
+                                           min="0" max="2" step="0.1" x-model="newAgent.temperature">
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="mb-3">
+                                    <label for="agentTopP" class="form-label">Top P</label>
+                                    <input type="number" class="form-control" id="agentTopP" 
+                                           min="0" max="1" step="0.1" x-model="newAgent.top_p">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="agentSystemPrompt" class="form-label">Системный промпт</label>
+                            <textarea class="form-control" id="agentSystemPrompt" rows="4" 
+                                      x-model="newAgent.system_prompt" 
+                                      placeholder="Введите системный промпт для агента..."></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @click="showCreateModal = false">
+                        Отмена
+                    </button>
+                    <button type="button" class="btn btn-primary" @click="createAgent()" 
+                            :disabled="isCreating">
+                        <span x-show="!isCreating">Создать</span>
+                        <span x-show="isCreating" class="spinner-border spinner-border-sm"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function agentsApp() {
+    return {
+        showCreateModal: false,
+        isCreating: false,
+        newAgent: {
+            name: '',
+            description: '',
+            model: 'llama-3.1-sonar-small-128k-online',
+            temperature: 0.7,
+            top_p: 1.0,
+            system_prompt: ''
+        },
+        
+        async createAgent() {
+            if (!this.newAgent.name.trim()) return;
+            
+            this.isCreating = true;
+            try {
+                const response = await fetch('/playground/api/agents/create/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrftoken
+                    },
+                    body: JSON.stringify(this.newAgent)
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    this.showCreateModal = false;
+                    this.resetForm();
+                    location.reload(); // Перезагружаем страницу для показа нового агента
+                } else {
+                    alert('Ошибка создания агента: ' + data.error);
+                }
+            } catch (error) {
+                alert('Ошибка создания агента: ' + error.message);
+            } finally {
+                this.isCreating = false;
+            }
+        },
+        
+        resetForm() {
+            this.newAgent = {
+                name: '',
+                description: '',
+                model: 'llama-3.1-sonar-small-128k-online',
+                temperature: 0.7,
+                top_p: 1.0,
+                system_prompt: ''
+            };
+        },
+        
+        editAgent(agentId) {
+            // TODO: Реализовать редактирование агента
+            alert('Редактирование агента будет реализовано');
+        },
+        
+        async deleteAgent(agentId) {
+            if (!confirm('Вы уверены, что хотите удалить этого агента?')) return;
+            
+            try {
+                const response = await fetch(`/playground/api/agents/${agentId}/delete/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': csrftoken
+                    }
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert('Ошибка удаления агента: ' + data.error);
+                }
+            } catch (error) {
+                alert('Ошибка удаления агента: ' + error.message);
+            }
+        }
+    }
+}
+</script>
+{% endblock %}

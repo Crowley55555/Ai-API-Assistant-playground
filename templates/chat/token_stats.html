@@ -1,0 +1,229 @@
+{% extends 'base.html' %}
+
+{% block title %}Статистика токенов - AI Playground{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4" x-data="tokenStatsApp()">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2>
+                    <i class="bi bi-graph-up"></i> Статистика токенов
+                </h2>
+                <div>
+                    <button class="btn btn-outline-primary" @click="refreshStats()">
+                        <i class="bi bi-arrow-clockwise"></i> Обновить
+                    </button>
+                    <a href="{% url 'chat:playground' %}" class="btn btn-primary">
+                        <i class="bi bi-chat-dots"></i> Playground
+                    </a>
+                </div>
+            </div>
+            
+            <!-- Loading State -->
+            <div x-show="loading" class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Загрузка...</span>
+                </div>
+                <p class="mt-2">Загрузка статистики...</p>
+            </div>
+            
+            <!-- Stats Content -->
+            <div x-show="!loading && stats" class="row">
+                <!-- Overview Cards -->
+                <div class="col-12 mb-4">
+                    <h4>Общая статистика</h4>
+                    <div class="row">
+                        <div class="col-md-3 mb-3">
+                            <div class="card bg-primary text-white">
+                                <div class="card-body text-center">
+                                    <i class="bi bi-chat-dots fs-1 mb-2"></i>
+                                    <h5 x-text="stats.overview.total_sessions"></h5>
+                                    <p class="mb-0">Сессий</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="card bg-info text-white">
+                                <div class="card-body text-center">
+                                    <i class="bi bi-message fs-1 mb-2"></i>
+                                    <h5 x-text="stats.overview.total_messages"></h5>
+                                    <p class="mb-0">Сообщений</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="card bg-success text-white">
+                                <div class="card-body text-center">
+                                    <i class="bi bi-hash fs-1 mb-2"></i>
+                                    <h5 x-text="stats.overview.total_tokens.toLocaleString()"></h5>
+                                    <p class="mb-0">Токенов</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="card bg-warning text-white">
+                                <div class="card-body text-center">
+                                    <i class="bi bi-currency-dollar fs-1 mb-2"></i>
+                                    <h5 x-text="'$' + stats.overview.total_cost.toFixed(6)"></h5>
+                                    <p class="mb-0">Стоимость</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Token Breakdown -->
+                <div class="col-md-6 mb-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">
+                                <i class="bi bi-pie-chart"></i> Распределение токенов
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row text-center">
+                                <div class="col-6">
+                                    <div class="mb-3">
+                                        <div class="text-primary fs-3 fw-bold" x-text="stats.overview.total_input_tokens.toLocaleString()"></div>
+                                        <small class="text-muted">Входные токены</small>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="mb-3">
+                                        <div class="text-success fs-3 fw-bold" x-text="stats.overview.total_output_tokens.toLocaleString()"></div>
+                                        <small class="text-muted">Выходные токены</small>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Progress Bar -->
+                            <div class="progress mb-3" style="height: 20px;">
+                                <div class="progress-bar bg-primary" role="progressbar" 
+                                     :style="'width: ' + (stats.overview.total_input_tokens / stats.overview.total_tokens * 100) + '%'"
+                                     :aria-valuenow="stats.overview.total_input_tokens"
+                                     aria-valuemin="0" 
+                                     :aria-valuemax="stats.overview.total_tokens">
+                                    <span x-text="Math.round(stats.overview.total_input_tokens / stats.overview.total_tokens * 100) + '%'"></span>
+                                </div>
+                                <div class="progress-bar bg-success" role="progressbar" 
+                                     :style="'width: ' + (stats.overview.total_output_tokens / stats.overview.total_tokens * 100) + '%'"
+                                     :aria-valuenow="stats.overview.total_output_tokens"
+                                     aria-valuemin="0" 
+                                     :aria-valuemax="stats.overview.total_tokens">
+                                    <span x-text="Math.round(stats.overview.total_output_tokens / stats.overview.total_tokens * 100) + '%'"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Cost Analysis -->
+                <div class="col-md-6 mb-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">
+                                <i class="bi bi-calculator"></i> Анализ стоимости
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row text-center">
+                                <div class="col-6">
+                                    <div class="mb-3">
+                                        <div class="text-info fs-4 fw-bold" x-text="'$' + (stats.overview.total_cost / stats.overview.total_sessions).toFixed(6)"></div>
+                                        <small class="text-muted">Средняя стоимость сессии</small>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="mb-3">
+                                        <div class="text-warning fs-4 fw-bold" x-text="'$' + (stats.overview.total_cost / stats.overview.total_tokens * 1000).toFixed(6)"></div>
+                                        <small class="text-muted">Стоимость за 1000 токенов</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Model Statistics -->
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">
+                                <i class="bi bi-cpu"></i> Статистика по моделям
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Модель</th>
+                                            <th>Сессий</th>
+                                            <th>Токенов</th>
+                                            <th>Стоимость</th>
+                                            <th>Средняя стоимость сессии</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <template x-for="[model, data] in Object.entries(stats.by_model)" :key="model">
+                                            <tr>
+                                                <td>
+                                                    <span class="badge bg-primary" x-text="model"></span>
+                                                </td>
+                                                <td x-text="data.sessions"></td>
+                                                <td x-text="data.total_tokens.toLocaleString()"></td>
+                                                <td x-text="'$' + data.total_cost.toFixed(6)"></td>
+                                                <td x-text="'$' + (data.total_cost / data.sessions).toFixed(6)"></td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Error State -->
+            <div x-show="!loading && !stats" class="text-center py-5">
+                <i class="bi bi-exclamation-triangle display-1 text-muted"></i>
+                <h4 class="text-muted mt-3">Ошибка загрузки</h4>
+                <p class="text-muted">Не удалось загрузить статистику токенов</p>
+                <button class="btn btn-primary" @click="refreshStats()">
+                    <i class="bi bi-arrow-clockwise"></i> Попробовать снова
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function tokenStatsApp() {
+    return {
+        loading: true,
+        stats: null,
+        
+        init() {
+            this.refreshStats();
+        },
+        
+        async refreshStats() {
+            this.loading = true;
+            try {
+                const response = await fetch('/api/token-stats/');
+                const data = await response.json();
+                this.stats = data;
+            } catch (error) {
+                console.error('Error loading token stats:', error);
+                this.stats = null;
+            } finally {
+                this.loading = false;
+            }
+        }
+    }
+}
+</script>
+{% endblock %}

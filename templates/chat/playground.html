@@ -1,0 +1,725 @@
+{% extends 'base.html' %}
+{% load model_tags %}
+
+{% block title %}Playground - AI Playground{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Стилизация карточек для светлой темы */
+[data-bs-theme="light"] .card {
+    background-color: rgba(255, 255, 255, 0.95);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+[data-bs-theme="light"] .card-header {
+    background-color: rgba(248, 249, 250, 0.95);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.125);
+}
+
+/* Стилизация карточек для темной темы */
+[data-bs-theme="dark"] .card {
+    background-color: rgba(33, 37, 41, 0.95);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+[data-bs-theme="dark"] .card-header {
+    background-color: rgba(52, 58, 64, 0.95);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.125);
+}
+
+/* Стилизация сообщений */
+[data-bs-theme="light"] .bg-primary {
+    background-color: #0d6efd !important;
+}
+
+[data-bs-theme="dark"] .bg-primary {
+    background-color: #0a58ca !important;
+}
+
+[data-bs-theme="light"] .bg-light {
+    background-color: #f8f9fa !important;
+}
+
+[data-bs-theme="dark"] .bg-light {
+    background-color: #343a40 !important;
+    color: #f8f9fa !important;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid vh-100 d-flex flex-column p-3" x-data="playgroundApp()">
+    <div class="row flex-grow-1 g-3">
+        <!-- Settings Card -->
+        <div class="col-lg-3 col-md-4">
+            <div class="card h-100 border rounded-3">
+                <div class="card-header">
+                    <ul class="nav nav-tabs card-header-tabs" role="tablist">
+                        <li class="nav-item">
+                            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#assistant1" type="button">
+                                Ассистент 1
+                            </button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#assistant2" type="button">
+                                Ассистент 2
+                            </button>
+                        </li>
+                    </ul>
+                </div>
+                <div class="card-body overflow-auto">
+                    <div class="tab-content">
+                        <!-- Assistant 1 Settings -->
+                        <div class="tab-pane fade show active" id="assistant1">
+                            <div class="mb-3">
+                                <label class="form-label">Модель ИИ</label>
+                                <select class="form-select" x-model="settings.model">
+                                    {% model_options %}
+                                </select>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">
+                                    Температура: <span x-text="settings.temperature"></span>
+                                </label>
+                                <input type="range" class="form-range" min="0" max="2" step="0.1" 
+                                       x-model="settings.temperature">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">
+                                    Top P: <span x-text="settings.top_p"></span>
+                                </label>
+                                <input type="range" class="form-range" min="0" max="1" step="0.1" 
+                                       x-model="settings.top_p">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Системный промпт</label>
+                                <textarea class="form-control" rows="4" x-model="settings.system_prompt"></textarea>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Загрузка файлов</label>
+                                <div class="border rounded p-3 text-center" 
+                                     @drop.prevent="handleDrop($event)" 
+                                     @dragover.prevent="dragOver = true"
+                                     @dragleave.prevent="dragOver = false"
+                                     :class="{ 'bg-light': dragOver }">
+                                    <input type="file" id="fileInput" class="d-none" 
+                                           @change="handleFileSelect($event)" 
+                                           accept=".txt,.py,.pdf,.jpg,.jpeg,.png,.gif">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" 
+                                            @click="$refs.fileInput.click()">
+                                        <i class="bi bi-paperclip"></i> Выбрать файл
+                                    </button>
+                                    <p class="small text-muted mt-2 mb-0">или перетащите файл сюда</p>
+                                </div>
+                                <div class="mt-2" x-show="uploadedFiles.length > 0">
+                                    <template x-for="file in uploadedFiles" :key="file.id">
+                                        <div class="badge bg-secondary me-1">
+                                            <span x-text="file.filename"></span>
+                                            <button type="button" class="btn-close btn-close-white btn-sm ms-1" 
+                                                    @click="removeFile(file.id)"></button>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3" x-show="sessionStats">
+                                <label class="form-label">Статистика</label>
+                                <div class="row text-center">
+                                    <div class="col-6">
+                                        <small class="text-muted">Токены</small>
+                                        <div class="fw-bold" x-text="sessionStats?.total_tokens || 0"></div>
+                                    </div>
+                                    <div class="col-6">
+                                        <small class="text-muted">Стоимость</small>
+                                        <div class="fw-bold" x-text="'$' + (sessionStats?.total_estimated_cost?.toFixed(6) || '0.000000')"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="d-grid">
+                                <button class="btn btn-outline-primary" @click="applySettingsToBoth()">
+                                    <i class="bi bi-arrow-left-right"></i> Применить к обоим чатам
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Assistant 2 Settings -->
+                        <div class="tab-pane fade" id="assistant2">
+                            <div class="mb-3">
+                                <label class="form-label">Модель ИИ</label>
+                                <select class="form-select" x-model="compareSettings.model">
+                                    {% model_options %}
+                                </select>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">
+                                    Температура: <span x-text="compareSettings.temperature"></span>
+                                </label>
+                                <input type="range" class="form-range" min="0" max="2" step="0.1" 
+                                       x-model="compareSettings.temperature">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">
+                                    Top P: <span x-text="compareSettings.top_p"></span>
+                                </label>
+                                <input type="range" class="form-range" min="0" max="1" step="0.1" 
+                                       x-model="compareSettings.top_p">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Системный промпт</label>
+                                <textarea class="form-control" rows="4" x-model="compareSettings.system_prompt"></textarea>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Загрузка файлов</label>
+                                <div class="border rounded p-3 text-center" 
+                                     @drop.prevent="handleCompareDrop($event)" 
+                                     @dragover.prevent="dragOver = true"
+                                     @dragleave.prevent="dragOver = false"
+                                     :class="{ 'bg-light': dragOver }">
+                                    <input type="file" id="fileInput2" class="d-none" 
+                                           @change="handleCompareFileSelect($event)" 
+                                           accept=".txt,.py,.pdf,.jpg,.jpeg,.png,.gif">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" 
+                                            @click="document.getElementById('fileInput2').click()">
+                                        <i class="bi bi-paperclip"></i> Выбрать файл
+                                    </button>
+                                    <p class="small text-muted mt-2 mb-0">или перетащите файл сюда</p>
+                                </div>
+                                <div class="mt-2" x-show="compareUploadedFiles.length > 0">
+                                    <template x-for="file in compareUploadedFiles" :key="file.id">
+                                        <div class="badge bg-secondary me-1">
+                                            <span x-text="file.filename"></span>
+                                            <button type="button" class="btn-close btn-close-white btn-sm ms-1" 
+                                                    @click="removeCompareFile(file.id)"></button>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3" x-show="compareSessionStats">
+                                <label class="form-label">Статистика</label>
+                                <div class="row text-center">
+                                    <div class="col-6">
+                                        <small class="text-muted">Токены</small>
+                                        <div class="fw-bold" x-text="compareSessionStats?.total_tokens || 0"></div>
+                                    </div>
+                                    <div class="col-6">
+                                        <small class="text-muted">Стоимость</small>
+                                        <div class="fw-bold" x-text="'$' + (compareSessionStats?.total_estimated_cost?.toFixed(6) || '0.000000')"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="d-grid">
+                                <button class="btn btn-outline-info" @click="applySettingsFromBoth()">
+                                    <i class="bi bi-arrow-left-right"></i> Скопировать из Ассистента 1
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Chat Area -->
+        <div :class="compareMode ? 'col-lg-9 col-md-8' : 'col-lg-9 col-md-8'">
+            <div class="row h-100 g-3">
+                <!-- Main Chat -->
+                <div :class="compareMode ? 'col-md-6' : 'col-12'">
+                    <div class="card h-100 border rounded-3">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0">
+                                <i class="bi bi-chat-dots"></i> Чат 1
+                            </h6>
+                            <div>
+                                <span class="badge bg-primary" x-text="settings.model"></span>
+                                <button class="btn btn-sm btn-outline-primary ms-2" @click="toggleCompare()">
+                                    <i class="bi bi-arrow-left-right"></i>
+                                    <span x-text="compareMode ? 'Скрыть' : 'Сравнить'"></span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-body overflow-auto" id="chatMessages1" style="max-height: calc(100vh - 300px);">
+                            <template x-for="message in messages" :key="message.id">
+                                <div class="mb-3">
+                                    <div class="card border rounded-3" :class="message.role === 'user' ? 'bg-primary text-white' : 'bg-light'">
+                                        <div class="card-body">
+                                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                                <strong x-text="message.role === 'user' ? 'Вы' : 'Ассистент'"></strong>
+                                                <div>
+                                                    <small class="me-2" x-text="formatTime(message.timestamp)"></small>
+                                                    <div class="btn-group btn-group-sm" x-show="message.role === 'user'">
+                                                        <button class="btn btn-sm btn-outline-secondary" @click="editMessage(message.id)">
+                                                            <i class="bi bi-pencil"></i>
+                                                        </button>
+                                                        <button class="btn btn-sm btn-outline-danger" @click="deleteMessage(message.id)">
+                                                            <i class="bi bi-trash"></i>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div x-html="formatMessage(message.content)"></div>
+                                            <div x-show="message.role === 'assistant' && message.token_stats" class="mt-2 pt-2 border-top">
+                                                <small>
+                                                    Токены: <span x-text="message.token_stats?.total_tokens"></span> | 
+                                                    Стоимость: $<span x-text="message.token_stats?.estimated_cost?.toFixed(6)"></span>
+                                                </small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Compare Chat -->
+                <div class="col-md-6" x-show="compareMode">
+                    <div class="card h-100 border rounded-3">
+                        <div class="card-header">
+                            <h6 class="mb-0">
+                                <i class="bi bi-chat-dots"></i> Чат 2
+                            </h6>
+                            <span class="badge bg-info" x-text="compareSettings.model"></span>
+                        </div>
+                        <div class="card-body overflow-auto" id="chatMessages2" style="max-height: calc(100vh - 300px);">
+                            <template x-for="message in compareMessages" :key="message.id">
+                                <div class="mb-3">
+                                    <div class="card border rounded-3" :class="message.role === 'user' ? 'bg-primary text-white' : 'bg-light'">
+                                        <div class="card-body">
+                                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                                <strong x-text="message.role === 'user' ? 'Вы' : 'Ассистент'"></strong>
+                                                <div>
+                                                    <small class="me-2" x-text="formatTime(message.timestamp)"></small>
+                                                    <div class="btn-group btn-group-sm" x-show="message.role === 'user'">
+                                                        <button class="btn btn-sm btn-outline-secondary" @click="editCompareMessage(message.id)">
+                                                            <i class="bi bi-pencil"></i>
+                                                        </button>
+                                                        <button class="btn btn-sm btn-outline-danger" @click="deleteCompareMessage(message.id)">
+                                                            <i class="bi bi-trash"></i>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div x-html="formatMessage(message.content)"></div>
+                                            <div x-show="message.role === 'assistant' && message.token_stats" class="mt-2 pt-2 border-top">
+                                                <small>
+                                                    Токены: <span x-text="message.token_stats?.total_tokens"></span> | 
+                                                    Стоимость: $<span x-text="message.token_stats?.estimated_cost?.toFixed(6)"></span>
+                                                </small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Input Area -->
+    <div class="row mt-3">
+        <div :class="compareMode && !applyToBoth ? 'col-md-6' : 'col-12'">
+            <div class="card border rounded-3">
+                <div class="card-body">
+                    <div class="mb-2">
+                        <button class="btn btn-sm btn-success" @click="newChat()">
+                            <i class="bi bi-plus-circle"></i> Новый чат
+                        </button>
+                        <div class="form-check form-switch d-inline-block ms-3" x-show="compareMode">
+                            <input class="form-check-input" type="checkbox" x-model="applyToBoth" id="applyToBoth">
+                            <label class="form-check-label" for="applyToBoth">
+                                Применить к обоим чатам
+                            </label>
+                        </div>
+                    </div>
+                    <div class="input-group">
+                        <textarea class="form-control" rows="2" 
+                                  x-model="currentMessage" 
+                                  @keydown.ctrl.enter="sendMessage()"
+                                  placeholder="Введите ваше сообщение... (Ctrl+Enter для отправки)"></textarea>
+                        <button class="btn btn-primary" @click="sendMessage()" 
+                                :disabled="!currentMessage.trim() || isLoading">
+                            <i class="bi bi-send" x-show="!isLoading"></i>
+                            <span class="spinner-border spinner-border-sm" x-show="isLoading"></span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6" x-show="compareMode && !applyToBoth">
+            <div class="card border rounded-3">
+                <div class="card-body">
+                    <div class="mb-2">
+                        <button class="btn btn-sm btn-success" @click="newCompareChat()">
+                            <i class="bi bi-plus-circle"></i> Новый чат
+                        </button>
+                    </div>
+                    <div class="input-group">
+                        <textarea class="form-control" rows="2" 
+                                  x-model="compareMessage" 
+                                  @keydown.ctrl.enter="sendCompareMessageDirect()"
+                                  placeholder="Введите сообщение для чата 2... (Ctrl+Enter для отправки)"></textarea>
+                        <button class="btn btn-info" @click="sendCompareMessageDirect()" 
+                                :disabled="!compareMessage.trim() || compareLoading">
+                            <i class="bi bi-send" x-show="!compareLoading"></i>
+                            <span class="spinner-border spinner-border-sm" x-show="compareLoading"></span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function playgroundApp() {
+    return {
+        settings: {
+            model: 'llama-3.1-sonar-small-128k-online',
+            temperature: 0.7,
+            top_p: 1.0,
+            system_prompt: ''
+        },
+        compareSettings: {
+            model: 'llama-3.1-sonar-large-128k-online',
+            temperature: 0.7,
+            top_p: 1.0,
+            system_prompt: ''
+        },
+        sessionId: null,
+        messages: [],
+        compareMessages: [],
+        currentMessage: '',
+        compareMessage: '',
+        isLoading: false,
+        compareLoading: false,
+        compareMode: false,
+        applyToBoth: true,
+        sessionStats: null,
+        compareSessionStats: null,
+        dragOver: false,
+        uploadedFiles: [],
+        compareUploadedFiles: [],
+        
+        init() {
+            this.loadSession();
+        },
+        
+        async loadSession() {
+            const response = await fetch('/playground/api/create-session/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrftoken
+                }
+            });
+            const data = await response.json();
+            if (data.success) {
+                this.sessionId = data.session.session_id;
+            }
+        },
+        
+        async sendMessage() {
+            if (!this.currentMessage.trim() || this.isLoading) return;
+            
+            const message = this.currentMessage.trim();
+            this.currentMessage = '';
+            this.isLoading = true;
+            
+            this.messages.push({
+                id: Date.now(),
+                role: 'user',
+                content: message,
+                timestamp: new Date().toISOString()
+            });
+            
+            if (this.compareMode && this.applyToBoth) {
+                this.compareMessages.push({
+                    id: Date.now() + 0.1,
+                    role: 'user',
+                    content: message,
+                    timestamp: new Date().toISOString()
+                });
+            }
+            
+            this.scrollToBottom();
+            
+            try {
+                const response = await fetch('/playground/api/send-message/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrftoken
+                    },
+                    body: JSON.stringify({
+                        session_id: this.sessionId,
+                        message: message
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    this.messages.push({
+                        id: Date.now() + 1,
+                        role: 'assistant',
+                        content: data.assistant_message.content,
+                        timestamp: data.assistant_message.timestamp,
+                        token_stats: data.assistant_message.token_stats
+                    });
+                    
+                    if (data.session_stats) {
+                        this.sessionStats = data.session_stats;
+                    }
+                    
+                    if (this.compareMode && this.applyToBoth) {
+                        await this.sendCompareMessage(message);
+                    }
+                }
+            } catch (error) {
+                console.error('Error:', error);
+            } finally {
+                this.isLoading = false;
+                this.scrollToBottom();
+            }
+        },
+        
+        async sendCompareMessage(message) {
+            if (!message || this.compareLoading) return;
+            
+            this.compareLoading = true;
+            
+            try {
+                const sessionResponse = await fetch('/playground/api/create-session/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrftoken
+                    },
+                    body: JSON.stringify({
+                        model: this.compareSettings.model,
+                        temperature: this.compareSettings.temperature,
+                        top_p: this.compareSettings.top_p,
+                        system_prompt: this.compareSettings.system_prompt
+                    })
+                });
+                
+                const sessionData = await sessionResponse.json();
+                
+                const response = await fetch('/playground/api/send-message/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrftoken
+                    },
+                    body: JSON.stringify({
+                        session_id: sessionData.session.session_id,
+                        message: message
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    this.compareMessages.push({
+                        id: Date.now() + 2,
+                        role: 'assistant',
+                        content: data.assistant_message.content,
+                        timestamp: data.assistant_message.timestamp,
+                        token_stats: data.assistant_message.token_stats
+                    });
+                    
+                    if (data.session_stats) {
+                        this.compareSessionStats = data.session_stats;
+                    }
+                }
+            } catch (error) {
+                console.error('Error:', error);
+            } finally {
+                this.compareLoading = false;
+                this.scrollToBottom();
+            }
+        },
+        
+        async sendCompareMessageDirect() {
+            if (!this.compareMessage.trim() || this.compareLoading) return;
+            
+            const message = this.compareMessage.trim();
+            this.compareMessage = '';
+            
+            this.compareMessages.push({
+                id: Date.now(),
+                role: 'user',
+                content: message,
+                timestamp: new Date().toISOString()
+            });
+            
+            await this.sendCompareMessage(message);
+        },
+        
+        toggleCompare() {
+            this.compareMode = !this.compareMode;
+            if (!this.compareMode) {
+                this.compareMessages = [];
+                this.compareSessionStats = null;
+            }
+        },
+        
+        newChat() {
+            this.messages = [];
+            this.sessionStats = null;
+            this.loadSession();
+        },
+        
+        newCompareChat() {
+            this.compareMessages = [];
+            this.compareSessionStats = null;
+        },
+        
+        editMessage(messageId) {
+            const message = this.messages.find(m => m.id === messageId);
+            if (message) {
+                this.currentMessage = message.content;
+                this.deleteMessage(messageId);
+            }
+        },
+        
+        deleteMessage(messageId) {
+            this.messages = this.messages.filter(m => m.id !== messageId);
+        },
+        
+        editCompareMessage(messageId) {
+            const message = this.compareMessages.find(m => m.id === messageId);
+            if (message) {
+                this.compareMessage = message.content;
+                this.deleteCompareMessage(messageId);
+            }
+        },
+        
+        deleteCompareMessage(messageId) {
+            this.compareMessages = this.compareMessages.filter(m => m.id !== messageId);
+        },
+        
+        formatTime(timestamp) {
+            return new Date(timestamp).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+        },
+        
+        formatMessage(content) {
+            return content.replace(/\n/g, '<br>');
+        },
+        
+        scrollToBottom() {
+            this.$nextTick(() => {
+                const chat1 = document.getElementById('chatMessages1');
+                const chat2 = document.getElementById('chatMessages2');
+                if (chat1) chat1.scrollTop = chat1.scrollHeight;
+                if (chat2) chat2.scrollTop = chat2.scrollHeight;
+            });
+        },
+        
+        // File handling for Assistant 1
+        handleFileSelect(event) {
+            const files = event.target.files;
+            this.uploadFiles(files, false);
+        },
+        
+        handleDrop(event) {
+            this.dragOver = false;
+            const files = event.dataTransfer.files;
+            this.uploadFiles(files, false);
+        },
+        
+        // File handling for Assistant 2
+        handleCompareFileSelect(event) {
+            const files = event.target.files;
+            this.uploadFiles(files, true);
+        },
+        
+        handleCompareDrop(event) {
+            this.dragOver = false;
+            const files = event.dataTransfer.files;
+            this.uploadFiles(files, true);
+        },
+        
+        async uploadFiles(files, isCompare) {
+            for (let file of files) {
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('session_id', this.sessionId);
+                
+                try {
+                    const response = await fetch('/playground/api/upload-file/', {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': csrftoken
+                        },
+                        body: formData
+                    });
+                    
+                    const data = await response.json();
+                    if (data.success) {
+                        const fileInfo = {
+                            id: data.file.file_id,
+                            filename: data.file.filename,
+                            file_type: data.file.file_type
+                        };
+                        
+                        if (isCompare) {
+                            this.compareUploadedFiles.push(fileInfo);
+                        } else {
+                            this.uploadedFiles.push(fileInfo);
+                        }
+                    }
+                } catch (error) {
+                    console.error('Upload error:', error);
+                }
+            }
+        },
+        
+        removeFile(fileId) {
+            this.uploadedFiles = this.uploadedFiles.filter(f => f.id !== fileId);
+        },
+        
+        removeCompareFile(fileId) {
+            this.compareUploadedFiles = this.compareUploadedFiles.filter(f => f.id !== fileId);
+        },
+        
+        // Apply settings to both chats
+        applySettingsToBoth() {
+            this.compareSettings = {
+                model: this.settings.model,
+                temperature: this.settings.temperature,
+                top_p: this.settings.top_p,
+                system_prompt: this.settings.system_prompt
+            };
+            this.compareUploadedFiles = [...this.uploadedFiles];
+            alert('Настройки применены к обоим чатам');
+        },
+        
+        // Copy settings from Assistant 1 to Assistant 2
+        applySettingsFromBoth() {
+            this.compareSettings = {
+                model: this.settings.model,
+                temperature: this.settings.temperature,
+                top_p: this.settings.top_p,
+                system_prompt: this.settings.system_prompt
+            };
+            this.compareUploadedFiles = [...this.uploadedFiles];
+            alert('Настройки скопированы из Ассистента 1');
+        }
+    }
+}
+</script>
+{% endblock %}

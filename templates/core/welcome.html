@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+
+{% block title %}Добро пожаловать - AI Playground{% endblock %}
+
+{% block content %}
+<div class="container-fluid vh-100 d-flex align-items-center justify-content-center">
+    <div class="row w-100">
+        <div class="col-lg-8 col-xl-6 mx-auto text-center">
+            <div class="card shadow-lg border-0">
+                <div class="card-body p-5">
+                    <div class="mb-4">
+                        <i class="bi bi-robot display-1 text-primary"></i>
+                    </div>
+                    
+                    <h1 class="display-4 fw-bold mb-4">AI Playground</h1>
+                    
+                    <p class="lead mb-4">
+                        Интерактивная платформа для экспериментов с различными моделями искусственного интеллекта. 
+                        Тестируйте промпты, загружайте файлы и сравнивайте результаты разных моделей.
+                    </p>
+                    
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-4">
+                            <div class="d-flex flex-column align-items-center">
+                                <i class="bi bi-cpu text-primary fs-1 mb-2"></i>
+                                <h5>Множество моделей</h5>
+                                <p class="text-muted small">Perplexity, GigaChat, Yandex GPT</p>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="d-flex flex-column align-items-center">
+                                <i class="bi bi-files text-primary fs-1 mb-2"></i>
+                                <h5>Загрузка файлов</h5>
+                                <p class="text-muted small">PDF, изображения, Python скрипты</p>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="d-flex flex-column align-items-center">
+                                <i class="bi bi-graph-up text-primary fs-1 mb-2"></i>
+                                <h5>Сравнение моделей</h5>
+                                <p class="text-muted small">Параллельное тестирование</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <a href="{% url 'chat:playground' %}" class="btn btn-primary btn-lg px-5">
+                        <i class="bi bi-play-circle"></i> Начать
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
