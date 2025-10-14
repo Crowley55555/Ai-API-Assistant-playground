@@ -123,18 +123,21 @@
         </div>
     </div>
     
+    <!-- Modal Backdrop -->
+    <div class="modal-backdrop fade" :class="{ 'show': showCreateModal }" x-show="showCreateModal"></div>
+    
     <!-- Create Agent Modal -->
-    <div class="modal fade" :class="{ 'show': showCreateModal }" 
-         :style="{ 'display': showCreateModal ? 'block' : 'none' }" 
-         tabindex="-1" x-show="showCreateModal">
-        <div class="modal-dialog modal-lg">
+    <div class="modal fade" :class="{ 'show d-block': showCreateModal }" 
+         tabindex="-1" x-show="showCreateModal"
+         @click.self="showCreateModal = false">
+        <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title">Создать агента</h5>
                     <button type="button" class="btn-close" @click="showCreateModal = false"></button>
                 </div>
                 <div class="modal-body">
-                    <form @submit.prevent="createAgent()">
+                    <form @submit.prevent="createAgent()" id="createAgentForm">
                         <div class="mb-3">
                             <label for="agentName" class="form-label">Название агента</label>
                             <input type="text" class="form-control" id="agentName" 
@@ -229,7 +232,8 @@ function agentsApp() {
                 if (data.success) {
                     this.showCreateModal = false;
                     this.resetForm();
-                    location.reload(); // Перезагружаем страницу для показа нового агента
+                    // Перенаправляем на страницу агента
+                    window.location.href = `/playground/agents/${data.agent.id}/`;
                 } else {
                     alert('Ошибка создания агента: ' + data.error);
                 }

@@ -240,6 +240,9 @@
                                 <i class="bi bi-chat-dots"></i> Чат 1
                             </h6>
                             <div>
+                                <button class="btn btn-sm btn-success me-2" @click="showSaveAgentModal1 = true">
+                                    <i class="bi bi-save"></i> Сохранить агента
+                                </button>
                                 <span class="badge bg-primary" x-text="settings.model"></span>
                                 <button class="btn btn-sm btn-outline-primary ms-2" @click="toggleCompare()">
                                     <i class="bi bi-arrow-left-right"></i>
@@ -284,11 +287,16 @@
                 <!-- Compare Chat -->
                 <div class="col-md-6" x-show="compareMode">
                     <div class="card h-100 border rounded-3">
-                        <div class="card-header">
+                        <div class="card-header d-flex justify-content-between align-items-center">
                             <h6 class="mb-0">
                                 <i class="bi bi-chat-dots"></i> Чат 2
                             </h6>
-                            <span class="badge bg-info" x-text="compareSettings.model"></span>
+                            <div>
+                                <button class="btn btn-sm btn-success me-2" @click="showSaveAgentModal2 = true">
+                                    <i class="bi bi-save"></i> Сохранить агента
+                                </button>
+                                <span class="badge bg-info" x-text="compareSettings.model"></span>
+                            </div>
                         </div>
                         <div class="card-body overflow-auto" id="chatMessages2" style="max-height: calc(100vh - 300px);">
                             <template x-for="message in compareMessages" :key="message.id">
@@ -381,6 +389,92 @@
             </div>
         </div>
     </div>
+    
+    <!-- Modal Backdrop -->
+    <div class="modal-backdrop fade" :class="{ 'show': showSaveAgentModal1 || showSaveAgentModal2 }" 
+         x-show="showSaveAgentModal1 || showSaveAgentModal2"></div>
+    
+    <!-- Save Agent Modal 1 -->
+    <div class="modal fade" :class="{ 'show d-block': showSaveAgentModal1 }" 
+         tabindex="-1" x-show="showSaveAgentModal1"
+         @click.self="showSaveAgentModal1 = false">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Сохранить агента (Чат 1)</h5>
+                    <button type="button" class="btn-close" @click="showSaveAgentModal1 = false"></button>
+                </div>
+                <div class="modal-body">
+                    <form @submit.prevent="saveAgent1()">
+                        <div class="mb-3">
+                            <label class="form-label">Название агента</label>
+                            <input type="text" class="form-control" x-model="newAgent1.name" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Описание</label>
+                            <textarea class="form-control" rows="3" x-model="newAgent1.description"></textarea>
+                        </div>
+                        <div class="alert alert-info">
+                            <strong>Настройки:</strong><br>
+                            Модель: <span x-text="settings.model"></span><br>
+                            Температура: <span x-text="settings.temperature"></span><br>
+                            Top P: <span x-text="settings.top_p"></span>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @click="showSaveAgentModal1 = false">
+                        Отмена
+                    </button>
+                    <button type="button" class="btn btn-success" @click="saveAgent1()" :disabled="isCreatingAgent1">
+                        <span x-show="!isCreatingAgent1">Сохранить</span>
+                        <span x-show="isCreatingAgent1" class="spinner-border spinner-border-sm"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Save Agent Modal 2 -->
+    <div class="modal fade" :class="{ 'show d-block': showSaveAgentModal2 }" 
+         tabindex="-1" x-show="showSaveAgentModal2"
+         @click.self="showSaveAgentModal2 = false">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Сохранить агента (Чат 2)</h5>
+                    <button type="button" class="btn-close" @click="showSaveAgentModal2 = false"></button>
+                </div>
+                <div class="modal-body">
+                    <form @submit.prevent="saveAgent2()">
+                        <div class="mb-3">
+                            <label class="form-label">Название агента</label>
+                            <input type="text" class="form-control" x-model="newAgent2.name" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Описание</label>
+                            <textarea class="form-control" rows="3" x-model="newAgent2.description"></textarea>
+                        </div>
+                        <div class="alert alert-info">
+                            <strong>Настройки:</strong><br>
+                            Модель: <span x-text="compareSettings.model"></span><br>
+                            Температура: <span x-text="compareSettings.temperature"></span><br>
+                            Top P: <span x-text="compareSettings.top_p"></span>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @click="showSaveAgentModal2 = false">
+                        Отмена
+                    </button>
+                    <button type="button" class="btn btn-success" @click="saveAgent2()" :disabled="isCreatingAgent2">
+                        <span x-show="!isCreatingAgent2">Сохранить</span>
+                        <span x-show="isCreatingAgent2" class="spinner-border spinner-border-sm"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
@@ -414,6 +508,18 @@ function playgroundApp() {
         dragOver: false,
         uploadedFiles: [],
         compareUploadedFiles: [],
+        showSaveAgentModal1: false,
+        showSaveAgentModal2: false,
+        isCreatingAgent1: false,
+        isCreatingAgent2: false,
+        newAgent1: {
+            name: '',
+            description: ''
+        },
+        newAgent2: {
+            name: '',
+            description: ''
+        },
         
         init() {
             this.loadSession();
@@ -718,6 +824,84 @@ function playgroundApp() {
             };
             this.compareUploadedFiles = [...this.uploadedFiles];
             alert('Настройки скопированы из Ассистента 1');
+        },
+        
+        // Save agent from Chat 1
+        async saveAgent1() {
+            if (!this.newAgent1.name.trim()) return;
+            
+            this.isCreatingAgent1 = true;
+            try {
+                const agentData = {
+                    name: this.newAgent1.name,
+                    description: this.newAgent1.description,
+                    model: this.settings.model,
+                    temperature: this.settings.temperature,
+                    top_p: this.settings.top_p,
+                    system_prompt: this.settings.system_prompt
+                };
+                
+                const response = await fetch('/playground/api/agents/create/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrftoken
+                    },
+                    body: JSON.stringify(agentData)
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    this.showSaveAgentModal1 = false;
+                    this.newAgent1 = { name: '', description: '' };
+                    alert('Агент успешно сохранен!');
+                } else {
+                    alert('Ошибка сохранения агента: ' + data.error);
+                }
+            } catch (error) {
+                alert('Ошибка сохранения агента: ' + error.message);
+            } finally {
+                this.isCreatingAgent1 = false;
+            }
+        },
+        
+        // Save agent from Chat 2
+        async saveAgent2() {
+            if (!this.newAgent2.name.trim()) return;
+            
+            this.isCreatingAgent2 = true;
+            try {
+                const agentData = {
+                    name: this.newAgent2.name,
+                    description: this.newAgent2.description,
+                    model: this.compareSettings.model,
+                    temperature: this.compareSettings.temperature,
+                    top_p: this.compareSettings.top_p,
+                    system_prompt: this.compareSettings.system_prompt
+                };
+                
+                const response = await fetch('/playground/api/agents/create/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrftoken
+                    },
+                    body: JSON.stringify(agentData)
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    this.showSaveAgentModal2 = false;
+                    this.newAgent2 = { name: '', description: '' };
+                    alert('Агент успешно сохранен!');
+                } else {
+                    alert('Ошибка сохранения агента: ' + data.error);
+                }
+            } catch (error) {
+                alert('Ошибка сохранения агента: ' + error.message);
+            } finally {
+                this.isCreatingAgent2 = false;
+            }
         }
     }
 }
