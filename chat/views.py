@@ -1,14 +1,19 @@
 import json
 import uuid
+import logging
 from django.shortcuts import render, get_object_or_404
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
+from django.utils import timezone
 from .models import ChatSession, Message, UploadedFile, Agent
 from .llm_service import LLMService
 from .file_processor import FileProcessor
+
+# Настройка логирования
+logger = logging.getLogger(__name__)
 
 
 def playground(request):
@@ -43,6 +48,39 @@ def load_session(request, session_id):
     return render(request, 'chat/playground.html', {'session': session})
 
 
+def test_connection(request):
+    """Страница для тестирования подключения."""
+    return render(request, 'chat/test_connection.html')
+
+
+def csrf_test(request):
+    """Страница для тестирования CSRF токена."""
+    return render(request, 'chat/csrf_test.html')
+
+
+def csrf_simple(request):
+    """Простая страница для тестирования CSRF токена."""
+    return render(request, 'chat/csrf_simple.html')
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def health_check(request):
+    """Проверка состояния сервера."""
+    try:
+        return JsonResponse({
+            'status': 'ok',
+            'message': 'Сервер работает',
+            'timestamp': timezone.now().isoformat()
+        })
+    except Exception as e:
+        logger.error(f"Health check error: {str(e)}")
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=500)
+
+
 @csrf_exempt
 @require_http_methods(["POST"])
 def create_session(request):
@@ -56,6 +94,7 @@ def create_session(request):
             model=data.get('model', 'llama-3.1-sonar-small-128k-online'),
             temperature=float(data.get('temperature', 0.7)),
             top_p=float(data.get('top_p', 1.0)),
+            max_tokens=int(data.get('max_tokens', 4000)),
             system_prompt=data.get('system_prompt', ''),
         )
         
@@ -82,21 +121,27 @@ def create_session(request):
 def send_message(request):
     """Отправка сообщения в чат."""
     try:
+        logger.info("Получен запрос на отправку сообщения")
         data = json.loads(request.body)
         session_id = data.get('session_id')
         
         if not session_id:
+            logger.error("Session ID не предоставлен")
             return JsonResponse({'success': False, 'error': 'Session ID required'})
         
         try:
             session = ChatSession.objects.get(session_id=session_id)
+            logger.info(f"Найдена сессия: {session_id}")
         except ChatSession.DoesNotExist:
+            logger.error(f"Сессия не найдена: {session_id}")
             return JsonResponse({'success': False, 'error': 'Session not found'})
         
         user_message = data.get('message', '').strip()
         if not user_message:
+            logger.error("Пустое сообщение")
             return JsonResponse({'success': False, 'error': 'Message cannot be empty'})
         
+        logger.info(f"Сохраняем сообщение пользователя: {user_message[:100]}...")
         # Сохраняем сообщение пользователя
         user_msg = Message.objects.create(
             session=session,
@@ -110,17 +155,45 @@ def send_message(request):
             if file.content_preview:
                 context += f"\n\nКонтекст из файла {file.filename}:\n{file.content_preview}"
         
+        logger.info(f"Модель: {session.model}, температура: {session.temperature}, top_p: {session.top_p}")
+        logger.info("Отправляем запрос к LLM сервису")
+        
+        # Подготавливаем системный промпт с учетом всех настроек
+        settings_prompt = f"\n\nКРИТИЧЕСКИ ВАЖНО - СТРОГО СОБЛЮДАЙ:\n"
+        settings_prompt += f"МАКСИМУМ ТОКЕНОВ: {session.max_tokens} (НЕ ПРЕВЫШАЙ!)\n"
+        
+        if session.temperature <= 0.3:
+            settings_prompt += f"СТИЛЬ: ОЧЕНЬ КРАТКО! 1-2 предложения. БЕЗ ДЕТАЛЕЙ!\n"
+        elif session.temperature <= 0.7:
+            settings_prompt += f"СТИЛЬ: Умеренно, с примерами, но без лишнего.\n"
+        else:
+            settings_prompt += f"СТИЛЬ: Развернуто, с деталями и эмоциями.\n"
+            
+        if session.top_p <= 0.5:
+            settings_prompt += f"ПОДХОД: Только факты, проверенная информация.\n"
+        else:
+            settings_prompt += f"ПОДХОД: Креативно, нестандартные идеи.\n"
+            
+        # Добавляем пример для низкой температуры
+        if session.temperature <= 0.3:
+            settings_prompt += f"\nПРИМЕР КРАТКОГО ОТВЕТА: 'Кот по имени Барсик жил в доме. Он любил спать на солнце.'\n"
+            
+        system_content = session.system_prompt + context + settings_prompt
+        
         # Отправляем запрос к LLM
         llm_service = LLMService()
         response_data = llm_service.generate_response(
             model=session.model,
             messages=[
-                {'role': 'system', 'content': session.system_prompt + context},
+                {'role': 'system', 'content': system_content},
                 {'role': 'user', 'content': user_message}
             ],
             temperature=session.temperature,
-            top_p=session.top_p
+            top_p=session.top_p,
+            max_tokens=session.max_tokens
         )
+        
+        logger.info("Получен ответ от LLM сервиса")
         
         # Сохраняем ответ ассистента с информацией о токенах
         assistant_msg = Message.objects.create(
@@ -145,6 +218,8 @@ def send_message(request):
         # Обновляем статистику токенов сессии
         session.update_token_stats()
         
+        logger.info("Сообщение успешно обработано и сохранено")
+        
         return JsonResponse({
             'success': True,
             'user_message': {
@@ -167,6 +242,7 @@ def send_message(request):
         })
         
     except Exception as e:
+        logger.error(f"Ошибка при обработке сообщения: {str(e)}")
         return JsonResponse({'success': False, 'error': str(e)})
 
 
@@ -241,20 +317,15 @@ def agent_detail(request, agent_id):
 
 
 @csrf_exempt
-@require_http_methods(["POST"])
-def create_agent(request):
-    """Создание нового агента."""
+@require_http_methods(["GET"])
+def get_agent(request, agent_id):
+    """Получение данных агента."""
     try:
-        data = json.loads(request.body)
+        agent = get_object_or_404(Agent, id=agent_id, is_active=True)
+        session = agent.get_or_create_session()
         
-        agent = Agent.objects.create(
-            name=data.get('name', 'Новый агент'),
-            description=data.get('description', ''),
-            model=data.get('model', 'llama-3.1-sonar-small-128k-online'),
-            temperature=float(data.get('temperature', 0.7)),
-            top_p=float(data.get('top_p', 1.0)),
-            system_prompt=data.get('system_prompt', ''),
-        )
+        # Загружаем последние сообщения
+        messages = session.messages.all().order_by('created_at')[:50]
         
         return JsonResponse({
             'success': True,
@@ -266,11 +337,111 @@ def create_agent(request):
                 'temperature': agent.temperature,
                 'top_p': agent.top_p,
                 'system_prompt': agent.system_prompt,
-                'created_at': agent.created_at.isoformat(),
-            }
+            },
+            'messages': [{
+                'id': msg.id,
+                'role': msg.role,
+                'content': msg.content,
+                'timestamp': msg.created_at.isoformat(),
+            } for msg in messages]
         })
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def create_agent(request):
+    """Создание нового агента или обновление существующего."""
+    try:
+        data = json.loads(request.body)
+        agent_name = data.get('name', 'Новый агент')
+        
+        # Проверяем, существует ли уже ассистент с таким именем
+        existing_agent = Agent.objects.filter(name=agent_name, is_active=True).first()
+        
+        if existing_agent:
+            # Обновляем существующего ассистента
+            existing_agent.description = data.get('description', existing_agent.description)
+            existing_agent.model = data.get('model', existing_agent.model)
+            existing_agent.temperature = float(data.get('temperature', existing_agent.temperature))
+            existing_agent.top_p = float(data.get('top_p', existing_agent.top_p))
+            existing_agent.max_tokens = int(data.get('max_tokens', existing_agent.max_tokens))
+            existing_agent.system_prompt = data.get('system_prompt', existing_agent.system_prompt)
+            existing_agent.updated_at = timezone.now()
+            existing_agent.save()
+            
+            return JsonResponse({
+                'success': True,
+                'agent': {
+                    'id': str(existing_agent.id),
+                    'name': existing_agent.name,
+                    'description': existing_agent.description,
+                    'model': existing_agent.model,
+                    'temperature': existing_agent.temperature,
+                    'top_p': existing_agent.top_p,
+                    'system_prompt': existing_agent.system_prompt,
+                    'created_at': existing_agent.created_at.isoformat(),
+                },
+                'updated': True
+            })
+        else:
+            # Создаем нового ассистента
+            agent = Agent.objects.create(
+                name=agent_name,
+                description=data.get('description', ''),
+                model=data.get('model', 'GigaChat:latest'),
+                temperature=float(data.get('temperature', 0.7)),
+                top_p=float(data.get('top_p', 1.0)),
+                max_tokens=int(data.get('max_tokens', 4000)),
+                system_prompt=data.get('system_prompt', ''),
+            )
+            
+            return JsonResponse({
+                'success': True,
+                'agent': {
+                    'id': str(agent.id),
+                    'name': agent.name,
+                    'description': agent.description,
+                    'model': agent.model,
+                    'temperature': agent.temperature,
+                    'top_p': agent.top_p,
+                    'system_prompt': agent.system_prompt,
+                    'created_at': agent.created_at.isoformat(),
+                },
+                'updated': False
+            })
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def check_agent_exists(request):
+    """Проверка существования ассистента по имени."""
+    try:
+        data = json.loads(request.body)
+        agent_name = data.get('name', '')
+        
+        existing_agent = Agent.objects.filter(name=agent_name, is_active=True).first()
+        
+        if existing_agent:
+            return JsonResponse({
+                'exists': True,
+                'agent': {
+                    'id': str(existing_agent.id),
+                    'name': existing_agent.name,
+                    'description': existing_agent.description,
+                    'model': existing_agent.model,
+                    'temperature': existing_agent.temperature,
+                    'top_p': existing_agent.top_p,
+                    'system_prompt': existing_agent.system_prompt,
+                }
+            })
+        else:
+            return JsonResponse({'exists': False})
+    except Exception as e:
+        return JsonResponse({'exists': False, 'error': str(e)})
 
 
 @csrf_exempt

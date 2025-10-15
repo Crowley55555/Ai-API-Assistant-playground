@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load model_tags %}
 
-{% block title %}Агенты - AI Playground{% endblock %}
+{% block title %}Ассистенты - AI Playground{% endblock %}
 
 {% block content %}
 <div class="container-fluid py-4" x-data="agentsApp()">
@@ -9,11 +9,11 @@
         <div class="col-12">
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h2>
-                    <i class="bi bi-robot"></i> Мои агенты
+                    <i class="bi bi-robot"></i> Мои ассистенты
                 </h2>
                 <div>
                     <button class="btn btn-primary" @click="showCreateModal = true">
-                        <i class="bi bi-plus-circle"></i> Создать агента
+                        <i class="bi bi-plus-circle"></i> Создать ассистента
                     </button>
                     <a href="{% url 'chat:playground' %}" class="btn btn-outline-secondary">
                         <i class="bi bi-chat-dots"></i> Playground
@@ -90,9 +90,9 @@
                                 
                                 <div class="card-footer bg-transparent">
                                     <div class="d-flex justify-content-between">
-                                        <a href="{% url 'chat:agent_detail' agent.id %}" 
+                                        <a href="{% url 'chat:playground' %}?assistant={{ agent.id }}" 
                                            class="btn btn-primary btn-sm">
-                                            <i class="bi bi-chat-dots"></i> Открыть
+                                            <i class="bi bi-chat-dots"></i> Открыть в Playground
                                         </a>
                                         <div class="btn-group btn-group-sm">
                                             <button type="button" class="btn btn-outline-secondary" 
@@ -113,10 +113,10 @@
             {% else %}
                 <div class="text-center py-5">
                     <i class="bi bi-robot display-1 text-muted"></i>
-                    <h4 class="text-muted mt-3">Агентов пока нет</h4>
-                    <p class="text-muted">Создайте своего первого агента для начала работы</p>
+                    <h4 class="text-muted mt-3">Ассистентов пока нет</h4>
+                    <p class="text-muted">Создайте своего первого ассистента для начала работы</p>
                     <button class="btn btn-primary" @click="showCreateModal = true">
-                        <i class="bi bi-plus-circle"></i> Создать агента
+                        <i class="bi bi-plus-circle"></i> Создать ассистента
                     </button>
                 </div>
             {% endif %}
@@ -133,13 +133,13 @@
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Создать агента</h5>
+                    <h5 class="modal-title">Создать ассистента</h5>
                     <button type="button" class="btn-close" @click="showCreateModal = false"></button>
                 </div>
                 <div class="modal-body">
                     <form @submit.prevent="createAgent()" id="createAgentForm">
                         <div class="mb-3">
-                            <label for="agentName" class="form-label">Название агента</label>
+                            <label for="agentName" class="form-label">Название ассистента</label>
                             <input type="text" class="form-control" id="agentName" 
                                    x-model="newAgent.name" required>
                         </div>
@@ -179,7 +179,7 @@
                             <label for="agentSystemPrompt" class="form-label">Системный промпт</label>
                             <textarea class="form-control" id="agentSystemPrompt" rows="4" 
                                       x-model="newAgent.system_prompt" 
-                                      placeholder="Введите системный промпт для агента..."></textarea>
+                                      placeholder="Введите системный промпт для ассистента..."></textarea>
                         </div>
                     </form>
                 </div>
@@ -232,13 +232,13 @@ function agentsApp() {
                 if (data.success) {
                     this.showCreateModal = false;
                     this.resetForm();
-                    // Перенаправляем на страницу агента
-                    window.location.href = `/playground/agents/${data.agent.id}/`;
+                    // Перенаправляем на playground с загрузкой ассистента
+                    window.location.href = `/playground/?assistant=${data.agent.id}`;
                 } else {
-                    alert('Ошибка создания агента: ' + data.error);
+                    alert('Ошибка создания ассистента: ' + data.error);
                 }
             } catch (error) {
-                alert('Ошибка создания агента: ' + error.message);
+                alert('Ошибка создания ассистента: ' + error.message);
             } finally {
                 this.isCreating = false;
             }

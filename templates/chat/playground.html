@@ -3,6 +3,8 @@
 
 {% block title %}Playground - AI Playground{% endblock %}
 
+<!-- CSRF токен загружается из base.html -->
+
 {% block extra_css %}
 <style>
 /* Стилизация карточек для светлой темы */
@@ -65,6 +67,11 @@
                                 Ассистент 2
                             </button>
                         </li>
+                        <li class="nav-item" x-show="compare2Mode">
+                            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#assistant3" type="button">
+                                Ассистент 3
+                            </button>
+                        </li>
                     </ul>
                 </div>
                 <div class="card-body overflow-auto">
@@ -95,6 +102,14 @@
                             </div>
                             
                             <div class="mb-3">
+                                <label class="form-label">
+                                    Макс. токенов: <span x-text="settings.max_tokens"></span>
+                                </label>
+                                <input type="range" class="form-range" min="100" max="8000" step="100" 
+                                       x-model="settings.max_tokens">
+                            </div>
+                            
+                            <div class="mb-3">
                                 <label class="form-label">Системный промпт</label>
                                 <textarea class="form-control" rows="4" x-model="settings.system_prompt"></textarea>
                             </div>
@@ -114,6 +129,7 @@
                                         <i class="bi bi-paperclip"></i> Выбрать файл
                                     </button>
                                     <p class="small text-muted mt-2 mb-0">или перетащите файл сюда</p>
+                                    <small class="text-muted">Поддерживаются: .txt (текст), .py (Python), .pdf (документы), .jpg/.jpeg/.png/.gif (изображения)</small>
                                 </div>
                                 <div class="mt-2" x-show="uploadedFiles.length > 0">
                                     <template x-for="file in uploadedFiles" :key="file.id">
@@ -173,6 +189,14 @@
                             </div>
                             
                             <div class="mb-3">
+                                <label class="form-label">
+                                    Макс. токенов: <span x-text="compareSettings.max_tokens"></span>
+                                </label>
+                                <input type="range" class="form-range" min="100" max="8000" step="100" 
+                                       x-model="compareSettings.max_tokens">
+                            </div>
+                            
+                            <div class="mb-3">
                                 <label class="form-label">Системный промпт</label>
                                 <textarea class="form-control" rows="4" x-model="compareSettings.system_prompt"></textarea>
                             </div>
@@ -192,6 +216,7 @@
                                         <i class="bi bi-paperclip"></i> Выбрать файл
                                     </button>
                                     <p class="small text-muted mt-2 mb-0">или перетащите файл сюда</p>
+                                    <small class="text-muted">Поддерживаются: .txt (текст), .py (Python), .pdf (документы), .jpg/.jpeg/.png/.gif (изображения)</small>
                                 </div>
                                 <div class="mt-2" x-show="compareUploadedFiles.length > 0">
                                     <template x-for="file in compareUploadedFiles" :key="file.id">
@@ -224,6 +249,96 @@
                                 </button>
                             </div>
                         </div>
+                        
+                        <!-- Assistant 3 Settings -->
+                        <div class="tab-pane fade" id="assistant3">
+                            <div class="mb-3">
+                                <label class="form-label">Модель</label>
+                                <select class="form-select" x-model="compare2Settings.model">
+                                    {% model_options %}
+                                </select>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Температура: <span x-text="compare2Settings.temperature"></span></label>
+                                <input type="range" class="form-range" min="0" max="2" step="0.1" x-model="compare2Settings.temperature">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Top P</label>
+                                <input type="number" class="form-control" min="0" max="1" step="0.1" x-model="compare2Settings.top_p">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Макс. токенов</label>
+                                <input type="number" class="form-control" min="100" max="8000" step="100" x-model="compare2Settings.max_tokens">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Системный промпт</label>
+                                <textarea class="form-control" rows="3" x-model="compare2Settings.system_prompt"></textarea>
+                            </div>
+                            
+                            <!-- File Upload for Compare 2 -->
+                            <div class="mb-3">
+                                <label class="form-label">Загрузить файлы</label>
+                                <div class="border rounded p-3" 
+                                     @drop.prevent="handleCompare2Drop($event)"
+                                     @dragover.prevent="dragOver = true"
+                                     @dragleave.prevent="dragOver = false">
+                                    <input type="file" 
+                                           id="compare2FileInput" 
+                                           class="form-control mb-2" 
+                                           multiple 
+                                           accept=".txt,.py,.pdf,.jpg,.jpeg,.png,.gif"
+                                           @change="handleCompare2FileSelect($event)">
+                                    <small class="text-muted">Поддерживаются: .txt (текст), .py (Python), .pdf (документы), .jpg/.jpeg/.png/.gif (изображения)</small>
+                                    
+                                    <div class="mt-2" x-show="compare2UploadedFiles.length > 0">
+                                        <strong>Загруженные файлы:</strong>
+                                        <ul class="list-group mt-2">
+                                            <template x-for="file in compare2UploadedFiles" :key="file.id">
+                                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                    <span x-text="file.name"></span>
+                                                    <button class="btn btn-sm btn-danger" @click="removeCompare2File(file.id)">
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
+                                                </li>
+                                            </template>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Token Stats for Compare 2 -->
+                            <div x-show="compare2SessionStats" class="mb-3">
+                                <div class="card">
+                                    <div class="card-body">
+                                        <h6 class="card-title">Статистика токенов</h6>
+                                        <div class="row text-center">
+                                            <div class="col-4">
+                                                <small class="text-muted">Входящие</small>
+                                                <div class="fw-bold" x-text="compare2SessionStats?.total_input_tokens || 0"></div>
+                                            </div>
+                                            <div class="col-4">
+                                                <small class="text-muted">Исходящие</small>
+                                                <div class="fw-bold" x-text="compare2SessionStats?.total_output_tokens || 0"></div>
+                                            </div>
+                                            <div class="col-4">
+                                                <small class="text-muted">Стоимость</small>
+                                                <div class="fw-bold" x-text="'$' + (compare2SessionStats?.total_estimated_cost?.toFixed(6) || '0.000000')"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="d-grid">
+                                <button class="btn btn-outline-info" @click="applySettingsFromCompare2()">
+                                    <i class="bi bi-arrow-left-right"></i> Скопировать из Ассистента 1
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -233,7 +348,7 @@
         <div :class="compareMode ? 'col-lg-9 col-md-8' : 'col-lg-9 col-md-8'">
             <div class="row h-100 g-3">
                 <!-- Main Chat -->
-                <div :class="compareMode ? 'col-md-6' : 'col-12'">
+                <div :class="compare2Mode ? 'col-md-4' : (compareMode ? 'col-md-6' : 'col-12')">
                     <div class="card h-100 border rounded-3">
                         <div class="card-header d-flex justify-content-between align-items-center">
                             <h6 class="mb-0">
@@ -241,13 +356,18 @@
                             </h6>
                             <div>
                                 <button class="btn btn-sm btn-success me-2" @click="showSaveAgentModal1 = true">
-                                    <i class="bi bi-save"></i> Сохранить агента
+                                    <i class="bi bi-save"></i> Сохранить ассистента
                                 </button>
                                 <span class="badge bg-primary" x-text="settings.model"></span>
-                                <button class="btn btn-sm btn-outline-primary ms-2" @click="toggleCompare()">
-                                    <i class="bi bi-arrow-left-right"></i>
-                                    <span x-text="compareMode ? 'Скрыть' : 'Сравнить'"></span>
-                                </button>
+                                <div class="btn-group btn-group-sm ms-2">
+                                    <button class="btn btn-outline-primary" @click="toggleCompare()">
+                                        <i class="bi bi-arrow-left-right"></i>
+                                        <span x-text="compareMode ? 'Скрыть 2' : 'Чат 2'"></span>
+                                    </button>
+                                    <button class="btn btn-outline-secondary" @click="toggleCompare2()" x-show="compareMode">
+                                        <span x-text="compare2Mode ? 'Скрыть 3' : 'Чат 3'"></span>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                         <div class="card-body overflow-auto" id="chatMessages1" style="max-height: calc(100vh - 300px);">
@@ -280,12 +400,22 @@
                                     </div>
                                 </div>
                             </template>
+                            
+                            <!-- Индикатор загрузки для чата 1 -->
+                            <div x-show="isLoading" class="mb-3">
+                                <div class="card border rounded-3 bg-light">
+                                    <div class="card-body d-flex align-items-center">
+                                        <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                        <span class="text-muted">ИИ генерирует ответ...</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
                 
                 <!-- Compare Chat -->
-                <div class="col-md-6" x-show="compareMode">
+                <div :class="compare2Mode ? 'col-md-4' : 'col-md-6'" x-show="compareMode">
                     <div class="card h-100 border rounded-3">
                         <div class="card-header d-flex justify-content-between align-items-center">
                             <h6 class="mb-0">
@@ -293,7 +423,7 @@
                             </h6>
                             <div>
                                 <button class="btn btn-sm btn-success me-2" @click="showSaveAgentModal2 = true">
-                                    <i class="bi bi-save"></i> Сохранить агента
+                                    <i class="bi bi-save"></i> Сохранить ассистента
                                 </button>
                                 <span class="badge bg-info" x-text="compareSettings.model"></span>
                             </div>
@@ -328,6 +458,74 @@
                                     </div>
                                 </div>
                             </template>
+                            
+                            <!-- Индикатор загрузки для чата 2 -->
+                            <div x-show="compareLoading" class="mb-3">
+                                <div class="card border rounded-3 bg-light">
+                                    <div class="card-body d-flex align-items-center">
+                                        <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                        <span class="text-muted">ИИ генерирует ответ...</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Compare Chat 2 (Third Chat) -->
+                <div class="col-md-4" x-show="compare2Mode">
+                    <div class="card h-100 border rounded-3">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0">
+                                <i class="bi bi-chat-dots"></i> Чат 3
+                            </h6>
+                            <div>
+                                <button class="btn btn-sm btn-success me-2" @click="showSaveAgentModal3 = true">
+                                    <i class="bi bi-save"></i> Сохранить ассистента
+                                </button>
+                                <span class="badge bg-warning" x-text="compare2Settings.model"></span>
+                            </div>
+                        </div>
+                        <div class="card-body overflow-auto" id="chatMessages3" style="max-height: calc(100vh - 300px);">
+                            <template x-for="message in compare2Messages" :key="message.id">
+                                <div class="mb-3">
+                                    <div class="card border rounded-3" :class="message.role === 'user' ? 'bg-primary text-white' : 'bg-light'">
+                                        <div class="card-body">
+                                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                                <strong x-text="message.role === 'user' ? 'Вы' : 'Ассистент'"></strong>
+                                                <div>
+                                                    <small class="me-2" x-text="formatTime(message.timestamp)"></small>
+                                                    <div class="btn-group btn-group-sm" x-show="message.role === 'user'">
+                                                        <button class="btn btn-sm btn-outline-secondary" @click="editCompare2Message(message.id)">
+                                                            <i class="bi bi-pencil"></i>
+                                                        </button>
+                                                        <button class="btn btn-sm btn-outline-danger" @click="deleteCompare2Message(message.id)">
+                                                            <i class="bi bi-trash"></i>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div x-html="formatMessage(message.content)"></div>
+                                            <div x-show="message.role === 'assistant' && message.token_stats" class="mt-2 pt-2 border-top">
+                                                <small>
+                                                    Токены: <span x-text="message.token_stats?.total_tokens"></span> | 
+                                                    Стоимость: $<span x-text="message.token_stats?.estimated_cost?.toFixed(6)"></span>
+                                                </small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+                            
+                            <!-- Индикатор загрузки для чата 3 -->
+                            <div x-show="compare2Loading" class="mb-3">
+                                <div class="card border rounded-3 bg-light">
+                                    <div class="card-body d-flex align-items-center">
+                                        <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                        <span class="text-muted">ИИ генерирует ответ...</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -337,17 +535,17 @@
     
     <!-- Input Area -->
     <div class="row mt-3">
-        <div :class="compareMode && !applyToBoth ? 'col-md-6' : 'col-12'">
+        <div :class="(compareMode || compare2Mode) && !applyToBoth ? (compare2Mode ? 'col-md-4' : 'col-md-6') : 'col-12'">
             <div class="card border rounded-3">
                 <div class="card-body">
                     <div class="mb-2">
                         <button class="btn btn-sm btn-success" @click="newChat()">
                             <i class="bi bi-plus-circle"></i> Новый чат
                         </button>
-                        <div class="form-check form-switch d-inline-block ms-3" x-show="compareMode">
+                        <div class="form-check form-switch d-inline-block ms-3" x-show="compareMode || compare2Mode">
                             <input class="form-check-input" type="checkbox" x-model="applyToBoth" id="applyToBoth">
                             <label class="form-check-label" for="applyToBoth">
-                                Применить к обоим чатам
+                                Применить ко всем чатам
                             </label>
                         </div>
                     </div>
@@ -360,13 +558,14 @@
                                 :disabled="!currentMessage.trim() || isLoading">
                             <i class="bi bi-send" x-show="!isLoading"></i>
                             <span class="spinner-border spinner-border-sm" x-show="isLoading"></span>
+                            <span x-show="isLoading" class="ms-1">Генерация...</span>
                         </button>
                     </div>
                 </div>
             </div>
         </div>
         
-        <div class="col-md-6" x-show="compareMode && !applyToBoth">
+        <div :class="compare2Mode ? 'col-md-4' : 'col-md-6'" x-show="compareMode && !applyToBoth">
             <div class="card border rounded-3">
                 <div class="card-body">
                     <div class="mb-2">
@@ -383,6 +582,31 @@
                                 :disabled="!compareMessage.trim() || compareLoading">
                             <i class="bi bi-send" x-show="!compareLoading"></i>
                             <span class="spinner-border spinner-border-sm" x-show="compareLoading"></span>
+                            <span x-show="compareLoading" class="ms-1">Генерация...</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4" x-show="compare2Mode && !applyToBoth">
+            <div class="card border rounded-3">
+                <div class="card-body">
+                    <div class="mb-2">
+                        <button class="btn btn-sm btn-success" @click="newCompare2Chat()">
+                            <i class="bi bi-plus-circle"></i> Новый чат
+                        </button>
+                    </div>
+                    <div class="input-group">
+                        <textarea class="form-control" rows="2" 
+                                  x-model="compare2Message" 
+                                  @keydown.ctrl.enter="sendCompare2MessageDirect()"
+                                  placeholder="Введите сообщение для чата 3... (Ctrl+Enter для отправки)"></textarea>
+                        <button class="btn btn-warning" @click="sendCompare2MessageDirect()" 
+                                :disabled="!compare2Message.trim() || compare2Loading">
+                            <i class="bi bi-send" x-show="!compare2Loading"></i>
+                            <span class="spinner-border spinner-border-sm" x-show="compare2Loading"></span>
+                            <span x-show="compare2Loading" class="ms-1">Генерация...</span>
                         </button>
                     </div>
                 </div>
@@ -391,8 +615,8 @@
     </div>
     
     <!-- Modal Backdrop -->
-    <div class="modal-backdrop fade" :class="{ 'show': showSaveAgentModal1 || showSaveAgentModal2 }" 
-         x-show="showSaveAgentModal1 || showSaveAgentModal2"></div>
+    <div class="modal-backdrop fade" :class="{ 'show': showSaveAgentModal1 || showSaveAgentModal2 || showSaveAgentModal3 }" 
+         x-show="showSaveAgentModal1 || showSaveAgentModal2 || showSaveAgentModal3"></div>
     
     <!-- Save Agent Modal 1 -->
     <div class="modal fade" :class="{ 'show d-block': showSaveAgentModal1 }" 
@@ -401,14 +625,15 @@
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Сохранить агента (Чат 1)</h5>
+                    <h5 class="modal-title">Сохранить ассистента (Чат 1)</h5>
                     <button type="button" class="btn-close" @click="showSaveAgentModal1 = false"></button>
                 </div>
                 <div class="modal-body">
                     <form @submit.prevent="saveAgent1()">
                         <div class="mb-3">
-                            <label class="form-label">Название агента</label>
-                            <input type="text" class="form-control" x-model="newAgent1.name" required>
+                            <label class="form-label">Название ассистента</label>
+                            <input type="text" class="form-control" x-model="newAgent1.name" 
+                                   @input="checkAndFillAgent1()" required>
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Описание</label>
@@ -418,7 +643,8 @@
                             <strong>Настройки:</strong><br>
                             Модель: <span x-text="settings.model"></span><br>
                             Температура: <span x-text="settings.temperature"></span><br>
-                            Top P: <span x-text="settings.top_p"></span>
+                            Top P: <span x-text="settings.top_p"></span><br>
+                            Макс. токенов: <span x-text="settings.max_tokens"></span>
                         </div>
                     </form>
                 </div>
@@ -442,14 +668,15 @@
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Сохранить агента (Чат 2)</h5>
+                    <h5 class="modal-title">Сохранить ассистента (Чат 2)</h5>
                     <button type="button" class="btn-close" @click="showSaveAgentModal2 = false"></button>
                 </div>
                 <div class="modal-body">
                     <form @submit.prevent="saveAgent2()">
                         <div class="mb-3">
-                            <label class="form-label">Название агента</label>
-                            <input type="text" class="form-control" x-model="newAgent2.name" required>
+                            <label class="form-label">Название ассистента</label>
+                            <input type="text" class="form-control" x-model="newAgent2.name" 
+                                   @input="checkAndFillAgent2()" required>
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Описание</label>
@@ -459,7 +686,8 @@
                             <strong>Настройки:</strong><br>
                             Модель: <span x-text="compareSettings.model"></span><br>
                             Температура: <span x-text="compareSettings.temperature"></span><br>
-                            Top P: <span x-text="compareSettings.top_p"></span>
+                            Top P: <span x-text="compareSettings.top_p"></span><br>
+                            Макс. токенов: <span x-text="compareSettings.max_tokens"></span>
                         </div>
                     </form>
                 </div>
@@ -475,6 +703,47 @@
             </div>
         </div>
     </div>
+    
+    <!-- Save Agent Modal 3 -->
+    <div class="modal fade" :class="{ 'show d-block': showSaveAgentModal3 }" 
+         tabindex="-1" x-show="showSaveAgentModal3"
+         @click.self="showSaveAgentModal3 = false">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Сохранить ассистента 3</h5>
+                    <button type="button" class="btn-close" @click="showSaveAgentModal3 = false"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Название</label>
+                        <input type="text" class="form-control" x-model="newAgent3.name" 
+                               @input="checkAndFillAgent3()" placeholder="Мой ассистент">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Описание</label>
+                        <textarea class="form-control" rows="3" x-model="newAgent3.description" placeholder="Описание ассистента..."></textarea>
+                    </div>
+                    <div class="alert alert-info">
+                        <strong>Текущие настройки:</strong>
+                        <ul class="mb-0 mt-2">
+                            <li>Модель: <span x-text="compare2Settings.model"></span></li>
+                            <li>Температура: <span x-text="compare2Settings.temperature"></span></li>
+                            <li>Top P: <span x-text="compare2Settings.top_p"></span></li>
+                            <li>Макс. токенов: <span x-text="compare2Settings.max_tokens"></span></li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @click="showSaveAgentModal3 = false">Отмена</button>
+                    <button type="button" class="btn btn-success" @click="saveAgent3()" :disabled="isCreatingAgent3">
+                        <span x-show="!isCreatingAgent3">Сохранить</span>
+                        <span x-show="isCreatingAgent3">Сохранение...</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
@@ -483,35 +752,53 @@
 function playgroundApp() {
     return {
         settings: {
-            model: 'llama-3.1-sonar-small-128k-online',
+            model: 'GigaChat:latest',
             temperature: 0.7,
             top_p: 1.0,
+            max_tokens: 4000,
             system_prompt: ''
         },
         compareSettings: {
-            model: 'llama-3.1-sonar-large-128k-online',
+            model: 'yandexgpt',
             temperature: 0.7,
             top_p: 1.0,
+            max_tokens: 4000,
+            system_prompt: ''
+        },
+        compare2Settings: {
+            model: 'GigaChat-Pro:latest',
+            temperature: 0.7,
+            top_p: 1.0,
+            max_tokens: 4000,
             system_prompt: ''
         },
         sessionId: null,
         messages: [],
         compareMessages: [],
+        compare2Messages: [],
         currentMessage: '',
         compareMessage: '',
+        compare2Message: '',
         isLoading: false,
         compareLoading: false,
+        compare2Loading: false,
         compareMode: false,
+        compare2Mode: false,
         applyToBoth: true,
         sessionStats: null,
         compareSessionStats: null,
         dragOver: false,
         uploadedFiles: [],
         compareUploadedFiles: [],
+        compare2UploadedFiles: [],
+        compareSessionStats: null,
+        compare2SessionStats: null,
         showSaveAgentModal1: false,
         showSaveAgentModal2: false,
+        showSaveAgentModal3: false,
         isCreatingAgent1: false,
         isCreatingAgent2: false,
+        isCreatingAgent3: false,
         newAgent1: {
             name: '',
             description: ''
@@ -520,22 +807,197 @@ function playgroundApp() {
             name: '',
             description: ''
         },
+        newAgent3: {
+            name: '',
+            description: ''
+        },
         
         init() {
+            // Глобальная обработка ошибок
+            window.addEventListener('unhandledrejection', (event) => {
+                console.error('Unhandled promise rejection:', event.reason);
+                this.showNotification('Произошла неожиданная ошибка. Проверьте консоль.', 'error');
+            });
+            
+            window.addEventListener('error', (event) => {
+                console.error('Global error:', event.error);
+                this.showNotification('Произошла ошибка JavaScript. Проверьте консоль.', 'error');
+            });
+            
             this.loadSession();
+            this.loadAssistantFromUrl();
+            
+            // Задержка для проверки сети, чтобы не блокировать загрузку
+            setTimeout(() => {
+                this.checkNetworkConnection();
+            }, 1000);
+        },
+        
+        async checkNetworkConnection() {
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000);
+                
+                const response = await fetch('/playground/api/health/', {
+                    method: 'GET',
+                    signal: controller.signal,
+                    headers: {
+                        'Cache-Control': 'no-cache',
+                        'Pragma': 'no-cache'
+                    }
+                });
+                
+                clearTimeout(timeoutId);
+                
+                if (response.ok) {
+                    this.showNotification('Подключение к серверу установлено', 'success');
+                } else {
+                    this.showNotification('Проблемы с подключением к серверу', 'warning');
+                }
+            } catch (error) {
+                if (error.name === 'AbortError') {
+                    this.showNotification('Таймаут подключения к серверу', 'warning');
+                } else {
+                    this.showNotification('Нет подключения к интернету', 'error');
+                }
+                console.log('Network check error:', error);
+            }
+        },
+        
+        showNotification(message, type = 'info') {
+            // Создаем уведомление
+            const notification = document.createElement('div');
+            notification.className = `alert alert-${type === 'error' ? 'danger' : type} alert-dismissible fade show position-fixed`;
+            notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+            notification.innerHTML = `
+                <strong>${this.getNotificationTitle(type)}</strong> ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            document.body.appendChild(notification);
+            
+            // Автоматически скрываем через 5 секунд
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.remove();
+                }
+            }, 5000);
+        },
+        
+        getNotificationTitle(type) {
+            const titles = {
+                'success': '✅',
+                'info': 'ℹ️',
+                'warning': '⚠️',
+                'error': '❌'
+            };
+            return titles[type] || 'ℹ️';
+        },
+        
+        getCSRFToken() {
+            // Функция для получения CSRF токена из cookies
+            function getCookie(name) {
+                let cookieValue = null;
+                if (document.cookie && document.cookie !== '') {
+                    const cookies = document.cookie.split(';');
+                    for (let i = 0; i < cookies.length; i++) {
+                        const cookie = cookies[i].trim();
+                        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                            break;
+                        }
+                    }
+                }
+                return cookieValue;
+            }
+            
+            // Сначала пробуем найти токен в скрытом поле
+            const tokenElement = document.querySelector('[name=csrfmiddlewaretoken]');
+            if (tokenElement && tokenElement.value) {
+                console.log('CSRF token from input:', tokenElement.value);
+                return tokenElement.value;
+            }
+            
+            // Если не найден в поле, пробуем получить из cookies
+            const token = getCookie('csrftoken');
+            if (token) {
+                console.log('CSRF token from cookie:', token);
+                return token;
+            }
+            
+            // Если ничего не найдено
+            console.error('CSRF token not found');
+            console.log('All cookies:', document.cookie);
+            console.log('All hidden inputs:', document.querySelectorAll('input[type="hidden"]'));
+            this.showNotification('Ошибка безопасности: CSRF токен не найден', 'error');
+            return null;
+        },
+        
+        loadAssistantFromUrl() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const assistantId = urlParams.get('assistant');
+            if (assistantId) {
+                this.loadAssistant(assistantId);
+            }
+        },
+        
+        async loadAssistant(assistantId) {
+            try {
+                const response = await fetch(`/playground/api/agents/${assistantId}/`, {
+                    method: 'GET',
+                    headers: {
+                        'X-CSRFToken': csrftoken
+                    }
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    // Загружаем настройки в первый чат
+                    this.settings = {
+                        model: data.agent.model,
+                        temperature: data.agent.temperature,
+                        top_p: data.agent.top_p,
+                        max_tokens: data.agent.max_tokens || 4000,
+                        system_prompt: data.agent.system_prompt
+                    };
+                    
+                    // Загружаем историю сообщений если есть
+                    if (data.messages && data.messages.length > 0) {
+                        this.messages = data.messages;
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading assistant:', error);
+            }
         },
         
         async loadSession() {
+            const csrftoken = this.getCSRFToken();
+            if (!csrftoken) {
+                console.error('CSRF token not found in loadSession');
+                return;
+            }
+            
             const response = await fetch('/playground/api/create-session/', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'X-CSRFToken': csrftoken
-                }
+                },
+                body: JSON.stringify({
+                    model: this.settings.model,
+                    temperature: this.settings.temperature,
+                    top_p: this.settings.top_p,
+                    max_tokens: this.settings.max_tokens,
+                    system_prompt: this.settings.system_prompt
+                })
             });
             const data = await response.json();
             if (data.success) {
                 this.sessionId = data.session.session_id;
+                console.log('Session created:', this.sessionId);
+            } else {
+                console.error('Failed to create session:', data.error);
             }
         },
         
@@ -546,6 +1008,16 @@ function playgroundApp() {
             this.currentMessage = '';
             this.isLoading = true;
             
+            // Проверяем наличие CSRF токена
+            const csrftoken = this.getCSRFToken();
+            if (!csrftoken) {
+                this.isLoading = false;
+                return;
+            }
+            
+            // Уведомление о принятии запроса
+            this.showNotification('Запрос принят, отправляем на обработку...', 'info');
+            
             this.messages.push({
                 id: Date.now(),
                 role: 'user',
@@ -553,32 +1025,48 @@ function playgroundApp() {
                 timestamp: new Date().toISOString()
             });
             
-            if (this.compareMode && this.applyToBoth) {
-                this.compareMessages.push({
-                    id: Date.now() + 0.1,
-                    role: 'user',
-                    content: message,
-                    timestamp: new Date().toISOString()
-                });
-            }
-            
             this.scrollToBottom();
             
             try {
+                // Уведомление о начале обработки
+                this.showNotification('Запрос обрабатывается ИИ...', 'info');
+                
+                // Если нет сессии, создаем новую
+                if (!this.sessionId) {
+                    this.showNotification('Создаем новую сессию...', 'info');
+                    await this.loadSession();
+                    
+                    // Проверяем, что сессия создалась
+                    if (!this.sessionId) {
+                        this.showNotification('Ошибка создания сессии', 'error');
+                        this.isLoading = false;
+                        return;
+                    }
+                }
+                
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 секунд таймаут
+                
                 const response = await fetch('/playground/api/send-message/', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-CSRFToken': csrftoken
+                        'X-CSRFToken': csrftoken,
+                        'Cache-Control': 'no-cache'
                     },
                     body: JSON.stringify({
                         session_id: this.sessionId,
                         message: message
-                    })
+                    }),
+                    signal: controller.signal
                 });
+                
+                clearTimeout(timeoutId);
                 
                 const data = await response.json();
                 if (data.success) {
+                    // Уведомление об успешном получении ответа
+                    this.showNotification('Ответ получен и добавлен в чат!', 'success');
                     this.messages.push({
                         id: Date.now() + 1,
                         role: 'assistant',
@@ -591,12 +1079,26 @@ function playgroundApp() {
                         this.sessionStats = data.session_stats;
                     }
                     
+                    // Отправляем сообщения в compare чаты
                     if (this.compareMode && this.applyToBoth) {
                         await this.sendCompareMessage(message);
                     }
+                    
+                    if (this.compare2Mode && this.applyToBoth) {
+                        await this.sendCompare2Message(message);
+                    }
+                } else {
+                    this.showNotification('Ошибка при обработке запроса: ' + (data.error || 'Неизвестная ошибка'), 'error');
                 }
             } catch (error) {
                 console.error('Error:', error);
+                if (error.name === 'AbortError') {
+                    this.showNotification('Таймаут запроса (60 сек). Попробуйте еще раз.', 'warning');
+                } else if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                    this.showNotification('Ошибка сети. Проверьте подключение к интернету.', 'error');
+                } else {
+                    this.showNotification('Ошибка: ' + (error.message || 'Неизвестная ошибка'), 'error');
+                }
             } finally {
                 this.isLoading = false;
                 this.scrollToBottom();
@@ -606,21 +1108,41 @@ function playgroundApp() {
         async sendCompareMessage(message) {
             if (!message || this.compareLoading) return;
             
+            const csrftoken = this.getCSRFToken();
+            if (!csrftoken) {
+                return;
+            }
+            
             this.compareLoading = true;
+            this.showNotification('Отправляем запрос во второй чат...', 'info');
+            
+            // Добавляем сообщение пользователя в compare чат
+            this.compareMessages.push({
+                id: Date.now() + 0.1,
+                role: 'user',
+                content: message,
+                timestamp: new Date().toISOString()
+            });
             
             try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 60000);
+                
                 const sessionResponse = await fetch('/playground/api/create-session/', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-CSRFToken': csrftoken
+                        'X-CSRFToken': csrftoken,
+                        'Cache-Control': 'no-cache'
                     },
                     body: JSON.stringify({
                         model: this.compareSettings.model,
                         temperature: this.compareSettings.temperature,
                         top_p: this.compareSettings.top_p,
+                        max_tokens: this.compareSettings.max_tokens,
                         system_prompt: this.compareSettings.system_prompt
-                    })
+                    }),
+                    signal: controller.signal
                 });
                 
                 const sessionData = await sessionResponse.json();
@@ -629,16 +1151,21 @@ function playgroundApp() {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-CSRFToken': csrftoken
+                        'X-CSRFToken': csrftoken,
+                        'Cache-Control': 'no-cache'
                     },
                     body: JSON.stringify({
                         session_id: sessionData.session.session_id,
                         message: message
-                    })
+                    }),
+                    signal: controller.signal
                 });
+                
+                clearTimeout(timeoutId);
                 
                 const data = await response.json();
                 if (data.success) {
+                    this.showNotification('Ответ получен во втором чате!', 'success');
                     this.compareMessages.push({
                         id: Date.now() + 2,
                         role: 'assistant',
@@ -650,9 +1177,18 @@ function playgroundApp() {
                     if (data.session_stats) {
                         this.compareSessionStats = data.session_stats;
                     }
+                } else {
+                    this.showNotification('Ошибка во втором чате: ' + (data.error || 'Неизвестная ошибка'), 'error');
                 }
             } catch (error) {
                 console.error('Error:', error);
+                if (error.name === 'AbortError') {
+                    this.showNotification('Таймаут запроса во втором чате (60 сек)', 'warning');
+                } else if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                    this.showNotification('Ошибка сети во втором чате. Проверьте подключение.', 'error');
+                } else {
+                    this.showNotification('Ошибка во втором чате: ' + (error.message || 'Неизвестная ошибка'), 'error');
+                }
             } finally {
                 this.compareLoading = false;
                 this.scrollToBottom();
@@ -665,14 +1201,112 @@ function playgroundApp() {
             const message = this.compareMessage.trim();
             this.compareMessage = '';
             
-            this.compareMessages.push({
-                id: Date.now(),
+            this.scrollToBottom();
+            
+            // Отправляем сообщение (сообщение пользователя будет добавлено в sendCompareMessage)
+            await this.sendCompareMessage(message);
+        },
+        
+        async sendCompare2Message(message) {
+            if (!message || this.compare2Loading) return;
+            
+            const csrftoken = this.getCSRFToken();
+            if (!csrftoken) {
+                return;
+            }
+            
+            this.compare2Loading = true;
+            this.showNotification('Отправляем запрос в третий чат...', 'info');
+            
+            // Добавляем сообщение пользователя в compare2 чат
+            this.compare2Messages.push({
+                id: Date.now() + 0.2,
                 role: 'user',
                 content: message,
                 timestamp: new Date().toISOString()
             });
             
-            await this.sendCompareMessage(message);
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 60000);
+                
+                const sessionResponse = await fetch('/playground/api/create-session/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrftoken,
+                        'Cache-Control': 'no-cache'
+                    },
+                    body: JSON.stringify({
+                        model: this.compare2Settings.model,
+                        temperature: this.compare2Settings.temperature,
+                        top_p: this.compare2Settings.top_p,
+                        max_tokens: this.compare2Settings.max_tokens,
+                        system_prompt: this.compare2Settings.system_prompt
+                    }),
+                    signal: controller.signal
+                });
+                
+                const sessionData = await sessionResponse.json();
+                
+                const response = await fetch('/playground/api/send-message/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrftoken,
+                        'Cache-Control': 'no-cache'
+                    },
+                    body: JSON.stringify({
+                        session_id: sessionData.session.session_id,
+                        message: message
+                    }),
+                    signal: controller.signal
+                });
+                
+                clearTimeout(timeoutId);
+                
+                const data = await response.json();
+                if (data.success) {
+                    this.showNotification('Ответ получен в третьем чате!', 'success');
+                    this.compare2Messages.push({
+                        id: Date.now() + 3,
+                        role: 'assistant',
+                        content: data.assistant_message.content,
+                        timestamp: data.assistant_message.timestamp,
+                        token_stats: data.assistant_message.token_stats
+                    });
+                    
+                    if (data.session_stats) {
+                        this.compare2SessionStats = data.session_stats;
+                    }
+                } else {
+                    this.showNotification('Ошибка в третьем чате: ' + (data.error || 'Неизвестная ошибка'), 'error');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                if (error.name === 'AbortError') {
+                    this.showNotification('Таймаут запроса в третьем чате (60 сек)', 'warning');
+                } else if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                    this.showNotification('Ошибка сети в третьем чате. Проверьте подключение.', 'error');
+                } else {
+                    this.showNotification('Ошибка в третьем чате: ' + (error.message || 'Неизвестная ошибка'), 'error');
+                }
+            } finally {
+                this.compare2Loading = false;
+                this.scrollToBottom();
+            }
+        },
+        
+        async sendCompare2MessageDirect() {
+            if (!this.compare2Message.trim() || this.compare2Loading) return;
+            
+            const message = this.compare2Message.trim();
+            this.compare2Message = '';
+            
+            this.scrollToBottom();
+            
+            // Отправляем сообщение (сообщение пользователя будет добавлено в sendCompare2Message)
+            await this.sendCompare2Message(message);
         },
         
         toggleCompare() {
@@ -680,6 +1314,17 @@ function playgroundApp() {
             if (!this.compareMode) {
                 this.compareMessages = [];
                 this.compareSessionStats = null;
+                this.compare2Mode = false;
+                this.compare2Messages = [];
+                this.compare2SessionStats = null;
+            }
+        },
+        
+        toggleCompare2() {
+            this.compare2Mode = !this.compare2Mode;
+            if (!this.compare2Mode) {
+                this.compare2Messages = [];
+                this.compare2SessionStats = null;
             }
         },
         
@@ -687,11 +1332,19 @@ function playgroundApp() {
             this.messages = [];
             this.sessionStats = null;
             this.loadSession();
+            this.showNotification('Новый чат создан!', 'success');
         },
         
         newCompareChat() {
             this.compareMessages = [];
             this.compareSessionStats = null;
+            this.showNotification('Новый чат для сравнения создан!', 'success');
+        },
+        
+        newCompare2Chat() {
+            this.compare2Messages = [];
+            this.compare2SessionStats = null;
+            this.showNotification('Новый третий чат создан!', 'success');
         },
         
         editMessage(messageId) {
@@ -704,6 +1357,7 @@ function playgroundApp() {
         
         deleteMessage(messageId) {
             this.messages = this.messages.filter(m => m.id !== messageId);
+            this.showNotification('Сообщение удалено', 'info');
         },
         
         editCompareMessage(messageId) {
@@ -716,6 +1370,20 @@ function playgroundApp() {
         
         deleteCompareMessage(messageId) {
             this.compareMessages = this.compareMessages.filter(m => m.id !== messageId);
+            this.showNotification('Сообщение удалено из второго чата', 'info');
+        },
+        
+        editCompare2Message(messageId) {
+            const message = this.compare2Messages.find(m => m.id === messageId);
+            if (message) {
+                this.compare2Message = message.content;
+                this.deleteCompare2Message(messageId);
+            }
+        },
+        
+        deleteCompare2Message(messageId) {
+            this.compare2Messages = this.compare2Messages.filter(m => m.id !== messageId);
+            this.showNotification('Сообщение удалено из третьего чата', 'info');
         },
         
         formatTime(timestamp) {
@@ -730,8 +1398,10 @@ function playgroundApp() {
             this.$nextTick(() => {
                 const chat1 = document.getElementById('chatMessages1');
                 const chat2 = document.getElementById('chatMessages2');
+                const chat3 = document.getElementById('chatMessages3');
                 if (chat1) chat1.scrollTop = chat1.scrollHeight;
                 if (chat2) chat2.scrollTop = chat2.scrollHeight;
+                if (chat3) chat3.scrollTop = chat3.scrollHeight;
             });
         },
         
@@ -750,29 +1420,53 @@ function playgroundApp() {
         // File handling for Assistant 2
         handleCompareFileSelect(event) {
             const files = event.target.files;
-            this.uploadFiles(files, true);
+            this.uploadFiles(files, 'compare');
         },
         
         handleCompareDrop(event) {
             this.dragOver = false;
             const files = event.dataTransfer.files;
-            this.uploadFiles(files, true);
+            this.uploadFiles(files, 'compare');
         },
         
-        async uploadFiles(files, isCompare) {
+        handleCompare2FileSelect(event) {
+            const files = event.target.files;
+            this.uploadFiles(files, 'compare2');
+        },
+        
+        handleCompare2Drop(event) {
+            this.dragOver = false;
+            const files = event.dataTransfer.files;
+            this.uploadFiles(files, 'compare2');
+        },
+        
+        async uploadFiles(files, chatType) {
+            const csrftoken = this.getCSRFToken();
+            if (!csrftoken) {
+                return;
+            }
+            
+            this.showNotification(`Загружаем ${files.length} файл(ов)...`, 'info');
+            
             for (let file of files) {
                 const formData = new FormData();
                 formData.append('file', file);
                 formData.append('session_id', this.sessionId);
                 
                 try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 секунд для загрузки файла
+                    
                     const response = await fetch('/playground/api/upload-file/', {
                         method: 'POST',
                         headers: {
                             'X-CSRFToken': csrftoken
                         },
-                        body: formData
+                        body: formData,
+                        signal: controller.signal
                     });
+                    
+                    clearTimeout(timeoutId);
                     
                     const data = await response.json();
                     if (data.success) {
@@ -782,14 +1476,27 @@ function playgroundApp() {
                             file_type: data.file.file_type
                         };
                         
-                        if (isCompare) {
+                        if (chatType === 'compare') {
                             this.compareUploadedFiles.push(fileInfo);
+                        } else if (chatType === 'compare2') {
+                            this.compare2UploadedFiles.push(fileInfo);
                         } else {
                             this.uploadedFiles.push(fileInfo);
                         }
+                        
+                        this.showNotification(`Файл "${fileInfo.filename}" успешно загружен!`, 'success');
+                    } else {
+                        this.showNotification(`Ошибка загрузки файла: ${data.error}`, 'error');
                     }
                 } catch (error) {
                     console.error('Upload error:', error);
+                    if (error.name === 'AbortError') {
+                        this.showNotification(`Таймаут загрузки файла "${file.name}" (30 сек)`, 'warning');
+                    } else if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                        this.showNotification(`Ошибка сети при загрузке "${file.name}"`, 'error');
+                    } else {
+                        this.showNotification(`Ошибка загрузки файла "${file.name}": ${error.message}`, 'error');
+                    }
                 }
             }
         },
@@ -802,16 +1509,21 @@ function playgroundApp() {
             this.compareUploadedFiles = this.compareUploadedFiles.filter(f => f.id !== fileId);
         },
         
+        removeCompare2File(fileId) {
+            this.compare2UploadedFiles = this.compare2UploadedFiles.filter(f => f.id !== fileId);
+        },
+        
         // Apply settings to both chats
         applySettingsToBoth() {
             this.compareSettings = {
                 model: this.settings.model,
                 temperature: this.settings.temperature,
                 top_p: this.settings.top_p,
+                max_tokens: this.settings.max_tokens,
                 system_prompt: this.settings.system_prompt
             };
             this.compareUploadedFiles = [...this.uploadedFiles];
-            alert('Настройки применены к обоим чатам');
+            this.showNotification('Настройки применены к обоим чатам!', 'success');
         },
         
         // Copy settings from Assistant 1 to Assistant 2
@@ -820,13 +1532,71 @@ function playgroundApp() {
                 model: this.settings.model,
                 temperature: this.settings.temperature,
                 top_p: this.settings.top_p,
+                max_tokens: this.settings.max_tokens,
                 system_prompt: this.settings.system_prompt
             };
             this.compareUploadedFiles = [...this.uploadedFiles];
             alert('Настройки скопированы из Ассистента 1');
         },
         
+        applySettingsFromCompare2() {
+            this.compare2Settings = {
+                model: this.settings.model,
+                temperature: this.settings.temperature,
+                top_p: this.settings.top_p,
+                max_tokens: this.settings.max_tokens,
+                system_prompt: this.settings.system_prompt
+            };
+            this.compare2UploadedFiles = [...this.uploadedFiles];
+            alert('Настройки скопированы из Ассистента 1');
+        },
+        
         // Save agent from Chat 1
+        async checkAgentExists(name) {
+            try {
+                const response = await fetch('/playground/api/agents/check/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrftoken
+                    },
+                    body: JSON.stringify({ name: name })
+                });
+                const data = await response.json();
+                return data.exists ? data.agent : null;
+            } catch (error) {
+                console.error('Error checking agent:', error);
+                return null;
+            }
+        },
+        
+        async checkAndFillAgent1() {
+            if (this.newAgent1.name.trim()) {
+                const existingAgent = await this.checkAgentExists(this.newAgent1.name);
+                if (existingAgent) {
+                    this.newAgent1.description = existingAgent.description;
+                }
+            }
+        },
+        
+        async checkAndFillAgent2() {
+            if (this.newAgent2.name.trim()) {
+                const existingAgent = await this.checkAgentExists(this.newAgent2.name);
+                if (existingAgent) {
+                    this.newAgent2.description = existingAgent.description;
+                }
+            }
+        },
+        
+        async checkAndFillAgent3() {
+            if (this.newAgent3.name.trim()) {
+                const existingAgent = await this.checkAgentExists(this.newAgent3.name);
+                if (existingAgent) {
+                    this.newAgent3.description = existingAgent.description;
+                }
+            }
+        },
+        
         async saveAgent1() {
             if (!this.newAgent1.name.trim()) return;
             
@@ -838,6 +1608,7 @@ function playgroundApp() {
                     model: this.settings.model,
                     temperature: this.settings.temperature,
                     top_p: this.settings.top_p,
+                    max_tokens: this.settings.max_tokens,
                     system_prompt: this.settings.system_prompt
                 };
                 
@@ -854,12 +1625,16 @@ function playgroundApp() {
                 if (data.success) {
                     this.showSaveAgentModal1 = false;
                     this.newAgent1 = { name: '', description: '' };
-                    alert('Агент успешно сохранен!');
+                    if (data.updated) {
+                        this.showNotification('Ассистент "' + data.agent.name + '" успешно обновлен!', 'success');
+                    } else {
+                        this.showNotification('Ассистент "' + data.agent.name + '" успешно создан!', 'success');
+                    }
                 } else {
-                    alert('Ошибка сохранения агента: ' + data.error);
+                    this.showNotification('Ошибка сохранения ассистента: ' + data.error, 'error');
                 }
             } catch (error) {
-                alert('Ошибка сохранения агента: ' + error.message);
+                this.showNotification('Ошибка сохранения ассистента: ' + error.message, 'error');
             } finally {
                 this.isCreatingAgent1 = false;
             }
@@ -893,14 +1668,60 @@ function playgroundApp() {
                 if (data.success) {
                     this.showSaveAgentModal2 = false;
                     this.newAgent2 = { name: '', description: '' };
-                    alert('Агент успешно сохранен!');
+                    if (data.updated) {
+                        this.showNotification('Ассистент "' + data.agent.name + '" успешно обновлен!', 'success');
+                    } else {
+                        this.showNotification('Ассистент "' + data.agent.name + '" успешно создан!', 'success');
+                    }
                 } else {
-                    alert('Ошибка сохранения агента: ' + data.error);
+                    this.showNotification('Ошибка сохранения ассистента: ' + data.error, 'error');
                 }
             } catch (error) {
-                alert('Ошибка сохранения агента: ' + error.message);
+                this.showNotification('Ошибка сохранения ассистента: ' + error.message, 'error');
             } finally {
                 this.isCreatingAgent2 = false;
+            }
+        },
+        
+        async saveAgent3() {
+            if (!this.newAgent3.name.trim()) return;
+            
+            this.isCreatingAgent3 = true;
+            try {
+                const agentData = {
+                    name: this.newAgent3.name,
+                    description: this.newAgent3.description,
+                    model: this.compare2Settings.model,
+                    temperature: this.compare2Settings.temperature,
+                    top_p: this.compare2Settings.top_p,
+                    system_prompt: this.compare2Settings.system_prompt
+                };
+                
+                const response = await fetch('/playground/api/agents/create/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrftoken
+                    },
+                    body: JSON.stringify(agentData)
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    this.showSaveAgentModal3 = false;
+                    this.newAgent3 = { name: '', description: '' };
+                    if (data.updated) {
+                        this.showNotification('Ассистент "' + data.agent.name + '" успешно обновлен!', 'success');
+                    } else {
+                        this.showNotification('Ассистент "' + data.agent.name + '" успешно создан!', 'success');
+                    }
+                } else {
+                    this.showNotification('Ошибка сохранения ассистента: ' + data.error, 'error');
+                }
+            } catch (error) {
+                this.showNotification('Ошибка сохранения ассистента: ' + error.message, 'error');
+            } finally {
+                this.isCreatingAgent3 = false;
             }
         }
     }

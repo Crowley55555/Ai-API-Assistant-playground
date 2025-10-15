@@ -1,0 +1,154 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Тест подключения{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h4>Тест подключения к серверу</h4>
+                </div>
+                <div class="card-body">
+                    <div id="connection-status" class="mb-3">
+                        <span class="badge bg-secondary">Проверяем подключение...</span>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <button class="btn btn-primary" onclick="testConnection()">Проверить подключение</button>
+                        <button class="btn btn-secondary" onclick="testHealthEndpoint()">Тест Health Endpoint</button>
+                    </div>
+                    
+                    <div id="test-results" class="mt-3">
+                        <!-- Результаты тестов будут здесь -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+async function testConnection() {
+    const statusEl = document.getElementById('connection-status');
+    const resultsEl = document.getElementById('test-results');
+    
+    statusEl.innerHTML = '<span class="badge bg-warning">Проверяем...</span>';
+    resultsEl.innerHTML = '';
+    
+    try {
+        const startTime = Date.now();
+        const response = await fetch('/playground/api/health/', {
+            method: 'GET',
+            headers: {
+                'Cache-Control': 'no-cache'
+            }
+        });
+        const endTime = Date.now();
+        const responseTime = endTime - startTime;
+        
+        if (response.ok) {
+            const data = await response.json();
+            statusEl.innerHTML = '<span class="badge bg-success">Подключение установлено</span>';
+            resultsEl.innerHTML = `
+                <div class="alert alert-success">
+                    <h6>✅ Подключение успешно!</h6>
+                    <p><strong>Время ответа:</strong> ${responseTime}ms</p>
+                    <p><strong>Статус:</strong> ${data.status}</p>
+                    <p><strong>Сообщение:</strong> ${data.message}</p>
+                    <p><strong>Время сервера:</strong> ${data.timestamp}</p>
+                </div>
+            `;
+        } else {
+            statusEl.innerHTML = '<span class="badge bg-danger">Ошибка подключения</span>';
+            resultsEl.innerHTML = `
+                <div class="alert alert-danger">
+                    <h6>❌ Ошибка подключения</h6>
+                    <p><strong>Статус HTTP:</strong> ${response.status}</p>
+                    <p><strong>Статус текст:</strong> ${response.statusText}</p>
+                </div>
+            `;
+        }
+    } catch (error) {
+        statusEl.innerHTML = '<span class="badge bg-danger">Ошибка сети</span>';
+        resultsEl.innerHTML = `
+            <div class="alert alert-danger">
+                <h6>❌ Ошибка сети</h6>
+                <p><strong>Тип ошибки:</strong> ${error.name}</p>
+                <p><strong>Сообщение:</strong> ${error.message}</p>
+            </div>
+        `;
+    }
+}
+
+async function testHealthEndpoint() {
+    const resultsEl = document.getElementById('test-results');
+    resultsEl.innerHTML = '<div class="alert alert-info">Тестируем Health Endpoint...</div>';
+    
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        
+        const startTime = Date.now();
+        const response = await fetch('/playground/api/health/', {
+            method: 'GET',
+            signal: controller.signal,
+            headers: {
+                'Cache-Control': 'no-cache',
+                'Pragma': 'no-cache'
+            }
+        });
+        const endTime = Date.now();
+        const responseTime = endTime - startTime;
+        
+        clearTimeout(timeoutId);
+        
+        if (response.ok) {
+            const data = await response.json();
+            resultsEl.innerHTML = `
+                <div class="alert alert-success">
+                    <h6>✅ Health Endpoint работает</h6>
+                    <p><strong>URL:</strong> /playground/api/health/</p>
+                    <p><strong>Время ответа:</strong> ${responseTime}ms</p>
+                    <p><strong>Статус:</strong> ${data.status}</p>
+                    <p><strong>Сообщение:</strong> ${data.message}</p>
+                    <p><strong>Время сервера:</strong> ${data.timestamp}</p>
+                </div>
+            `;
+        } else {
+            resultsEl.innerHTML = `
+                <div class="alert alert-warning">
+                    <h6>⚠️ Health Endpoint недоступен</h6>
+                    <p><strong>Статус HTTP:</strong> ${response.status}</p>
+                    <p><strong>Статус текст:</strong> ${response.statusText}</p>
+                </div>
+            `;
+        }
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            resultsEl.innerHTML = `
+                <div class="alert alert-warning">
+                    <h6>⚠️ Таймаут запроса</h6>
+                    <p>Запрос был прерван через 5 секунд</p>
+                </div>
+            `;
+        } else {
+            resultsEl.innerHTML = `
+                <div class="alert alert-danger">
+                    <h6>❌ Ошибка при тестировании</h6>
+                    <p><strong>Тип ошибки:</strong> ${error.name}</p>
+                    <p><strong>Сообщение:</strong> ${error.message}</p>
+                </div>
+            `;
+        }
+    }
+}
+
+// Автоматический тест при загрузке страницы
+window.addEventListener('load', () => {
+    setTimeout(testConnection, 1000);
+});
+</script>
+{% endblock %}

@@ -65,7 +65,19 @@ DEBUG=True
 # DB_NAME=ai_playground
 # DB_USER=postgres
 # DB_PASSWORD=your-password
+
+# LLM API Keys
 PERPLEXITY_API_KEY=your-perplexity-api-key
+GIGACHAT_API_KEY=your-gigachat-api-key
+GIGACHAT_CLIENT_SECRET=your-gigachat-client-secret
+GIGACHAT_SCOPE=GIGACHAT_API_PERS
+
+# Yandex GPT API Settings
+YANDEX_API_KEY=your-yandex-api-key
+YANDEX_FOLDER_ID=your-folder-id
+
+# Default LLM Provider
+DEFAULT_LLM_PROVIDER=gigachat
 ```
 
 7. **Выполните миграции:**
@@ -181,6 +193,25 @@ ai_playground/
 2. **Настроить модели**: Используйте левую панель для основной модели, правую - для сравнения
 3. **Отправить сообщения**: Введите сообщение в любое окно чата
 4. **Сравнить результаты**: Анализируйте ответы, токены и стоимость каждой модели
+
+## Настройка API ключей
+
+### GigaChat
+1. Зарегистрируйтесь на [GigaChat](https://developers.sber.ru/portal/products/gigachat)
+2. Получите API ключ и Client Secret
+3. Добавьте их в `.env` файл
+
+### Yandex GPT
+1. Создайте аккаунт в [Yandex Cloud](https://console.cloud.yandex.ru/)
+2. Создайте сервисный аккаунт с ролью `ai.languageModels.user`
+3. Получите API ключ для сервисного аккаунта
+4. Найдите Folder ID в консоли Yandex Cloud (в разделе "Облако")
+5. Добавьте API ключ и Folder ID в `.env` файл
+
+### Perplexity
+1. Зарегистрируйтесь на [Perplexity](https://www.perplexity.ai/)
+2. Получите API ключ в настройках аккаунта
+3. Добавьте его в `.env` файл
 
 ## Поддерживаемые форматы файлов
 

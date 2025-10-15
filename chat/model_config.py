@@ -3,23 +3,6 @@
 """
 
 AVAILABLE_MODELS = {
-    'perplexity': [
-        {
-            'value': 'llama-3.1-sonar-small-128k-online',
-            'label': 'Llama 3.1 Sonar Small',
-            'description': 'Быстрая модель для простых задач'
-        },
-        {
-            'value': 'llama-3.1-sonar-large-128k-online',
-            'label': 'Llama 3.1 Sonar Large',
-            'description': 'Сбалансированная модель для большинства задач'
-        },
-        {
-            'value': 'llama-3.1-sonar-huge-128k-online',
-            'label': 'Llama 3.1 Sonar Huge',
-            'description': 'Мощная модель для сложных задач'
-        },
-    ],
     'gigachat': [
         {
             'value': 'GigaChat:latest',

@@ -12,6 +12,7 @@ class ChatSession(models.Model):
     model = models.CharField(max_length=100)
     temperature = models.FloatField(default=0.7)
     top_p = models.FloatField(default=1.0)
+    max_tokens = models.PositiveIntegerField(default=4000)
     system_prompt = models.TextField(blank=True)
     python_functions = models.TextField(blank=True)
     created_at = models.DateTimeField(default=timezone.now)
@@ -115,6 +116,7 @@ class Agent(models.Model):
     model = models.CharField(max_length=100, help_text="Модель ИИ")
     temperature = models.FloatField(default=0.7, help_text="Температура")
     top_p = models.FloatField(default=1.0, help_text="Top P")
+    max_tokens = models.PositiveIntegerField(default=4000, help_text="Максимальное количество токенов")
     system_prompt = models.TextField(blank=True, help_text="Системный промпт")
     
     # Метаданные
@@ -146,6 +148,7 @@ class Agent(models.Model):
             model=self.model,
             temperature=self.temperature,
             top_p=self.top_p,
+            max_tokens=self.max_tokens,
             system_prompt=self.system_prompt,
         )
         self.current_session = session
@@ -164,6 +167,7 @@ class Agent(models.Model):
             'model': self.model,
             'temperature': self.temperature,
             'top_p': self.top_p,
+            'max_tokens': self.max_tokens,
             'system_prompt': self.system_prompt,
         }
     

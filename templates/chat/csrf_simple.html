@@ -1,0 +1,100 @@
+{% extends 'base.html' %}
+
+{% block title %}CSRF Test{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h4>Тест CSRF токена</h4>
+                </div>
+                <div class="card-body">
+                    <div id="csrf-info" class="mb-3">
+                        <h5>Информация о CSRF токене:</h5>
+                        <div id="token-info"></div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <button class="btn btn-primary" onclick="checkToken()">Проверить токен</button>
+                        <button class="btn btn-success" onclick="testToken()">Тестировать токен</button>
+                    </div>
+                    
+                    <div id="test-results" class="mt-3">
+                        <!-- Результаты тестов будут здесь -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function checkToken() {
+    const tokenElement = document.querySelector('[name=csrfmiddlewaretoken]');
+    const cookies = document.cookie;
+    
+    let info = '<ul>';
+    info += `<li><strong>CSRF элемент:</strong> ${tokenElement ? 'Найден' : 'Не найден'}</li>`;
+    if (tokenElement) {
+        info += `<li><strong>Значение токена:</strong> ${tokenElement.value || 'Пустое'}</li>`;
+    }
+    info += `<li><strong>Все cookies:</strong> ${cookies || 'Нет cookies'}</li>`;
+    info += `<li><strong>CSRF cookie:</strong> ${getCookie('csrftoken') || 'Не найден'}</li>`;
+    info += '</ul>';
+    
+    document.getElementById('token-info').innerHTML = info;
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+async function testToken() {
+    const resultsEl = document.getElementById('test-results');
+    resultsEl.innerHTML = '<div class="alert alert-info">Тестируем CSRF...</div>';
+    
+    try {
+        const token = getCookie('csrftoken');
+        
+        if (!token) {
+            resultsEl.innerHTML = '<div class="alert alert-danger">CSRF токен не найден в cookies!</div>';
+            return;
+        }
+        
+        const response = await fetch('/playground/api/health/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': token
+            },
+            body: JSON.stringify({test: 'csrf'})
+        });
+        
+        if (response.ok) {
+            resultsEl.innerHTML = '<div class="alert alert-success">CSRF токен работает!</div>';
+        } else {
+            resultsEl.innerHTML = `<div class="alert alert-warning">Ошибка: ${response.status}</div>`;
+        }
+        
+    } catch (error) {
+        resultsEl.innerHTML = `<div class="alert alert-danger">Ошибка: ${error.message}</div>`;
+    }
+}
+
+// Проверяем токен при загрузке страницы
+window.addEventListener('load', checkToken);
+</script>
+{% endblock %}
