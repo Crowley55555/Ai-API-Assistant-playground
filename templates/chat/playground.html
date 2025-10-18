@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load model_tags %}
+{% load static %}
 
 {% block title %}Playground - AI Playground{% endblock %}
 
@@ -50,7 +51,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid vh-100 d-flex flex-column p-3" x-data="playgroundApp()">
+<div class="container-fluid vh-100 d-flex flex-column p-3" x-data="playgroundApp()" x-init="init()">
     <div class="row flex-grow-1 g-3">
         <!-- Settings Card -->
         <div class="col-lg-3 col-md-4">
@@ -80,7 +81,7 @@
                         <div class="tab-pane fade show active" id="assistant1">
                             <div class="mb-3">
                                 <label class="form-label">Модель ИИ</label>
-                                <select class="form-select" x-model="settings.model">
+                                <select class="form-select" x-model="settings.model" @change="updateAllSessions()">
                                     {% model_options %}
                                 </select>
                             </div>
@@ -89,16 +90,16 @@
                                 <label class="form-label">
                                     Температура: <span x-text="settings.temperature"></span>
                                 </label>
-                                <input type="range" class="form-range" min="0" max="2" step="0.1" 
-                                       x-model="settings.temperature">
+                                <input type="range" class="form-range" min="0" max="2" step="0.01" 
+                                       x-model="settings.temperature" @input="updateAllSessions()">
                             </div>
                             
                             <div class="mb-3">
                                 <label class="form-label">
                                     Top P: <span x-text="settings.top_p"></span>
                                 </label>
-                                <input type="range" class="form-range" min="0" max="1" step="0.1" 
-                                       x-model="settings.top_p">
+                                <input type="range" class="form-range" min="0" max="1" step="0.01" 
+                                       x-model="settings.top_p" @input="updateAllSessions()">
                             </div>
                             
                             <div class="mb-3">
@@ -106,12 +107,65 @@
                                     Макс. токенов: <span x-text="settings.max_tokens"></span>
                                 </label>
                                 <input type="range" class="form-range" min="100" max="8000" step="100" 
-                                       x-model="settings.max_tokens">
+                                       x-model="settings.max_tokens" @input="updateAllSessions()">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" 
+                                           x-model="settings.web_search" 
+                                           @change="updateAllSessions()"
+                                           id="webSearch1">
+                                    <label class="form-check-label" for="webSearch1">
+                                        <i class="bi bi-search"></i> Поиск
+                                    </label>
+                                </div>
                             </div>
                             
                             <div class="mb-3">
                                 <label class="form-label">Системный промпт</label>
-                                <textarea class="form-control" rows="4" x-model="settings.system_prompt"></textarea>
+                                <div class="d-flex gap-2 mb-2">
+                                    <button type="button" class="btn btn-outline-success btn-sm" @click="saveSystemPrompt()">
+                                        <i class="bi bi-save"></i> Сохранить в ассистенте
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" @click="loadSystemPrompt()">
+                                        <i class="bi bi-arrow-clockwise"></i> Загрузить из ассистента
+                                    </button>
+                                    <button type="button" class="btn btn-outline-danger btn-sm" @click="clearSystemPrompt()">
+                                        <i class="bi bi-trash"></i> Очистить
+                                    </button>
+                                </div>
+                                <textarea class="form-control" rows="4" x-model="settings.system_prompt" 
+                                          @input="updateAllSessions()"
+                                          placeholder="Введите системный промпт для ассистента..."></textarea>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Python функции</label>
+                                <div class="d-flex gap-2 mb-2">
+                                    <button type="button" class="btn btn-outline-info btn-sm" @click="showAddFunctionModal = true">
+                                        <i class="bi bi-plus-circle"></i> Добавить функцию
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" @click="clearFunctions()">
+                                        <i class="bi bi-trash"></i> Очистить
+                                    </button>
+                                </div>
+                                <div class="border rounded p-2" style="max-height: 150px; overflow-y: auto;">
+                                    <div x-show="currentFunctions.length === 0" class="text-muted small">
+                                        Нет добавленных функций. Нажмите "Добавить функцию" для создания.
+                                    </div>
+                                    <template x-for="(func, index) in currentFunctions" :key="index">
+                                        <div class="d-flex justify-content-between align-items-center mb-1">
+                                            <div>
+                                                <strong x-text="func.name"></strong>
+                                                <small class="text-muted d-block" x-text="func.description || 'Без описания'"></small>
+                                            </div>
+                                            <button type="button" class="btn btn-sm btn-outline-danger" @click="removeFunction(index)">
+                                                <i class="bi bi-x"></i>
+                                            </button>
+                                        </div>
+                                    </template>
+                                </div>
                             </div>
                             
                             <div class="mb-3">
@@ -125,20 +179,81 @@
                                            @change="handleFileSelect($event)" 
                                            accept=".txt,.py,.pdf,.jpg,.jpeg,.png,.gif">
                                     <button type="button" class="btn btn-outline-secondary btn-sm" 
-                                            @click="$refs.fileInput.click()">
+                                            @click="document.getElementById('fileInput').click()">
                                         <i class="bi bi-paperclip"></i> Выбрать файл
                                     </button>
                                     <p class="small text-muted mt-2 mb-0">или перетащите файл сюда</p>
                                     <small class="text-muted">Поддерживаются: .txt (текст), .py (Python), .pdf (документы), .jpg/.jpeg/.png/.gif (изображения)</small>
-                                </div>
-                                <div class="mt-2" x-show="uploadedFiles.length > 0">
-                                    <template x-for="file in uploadedFiles" :key="file.id">
-                                        <div class="badge bg-secondary me-1">
-                                            <span x-text="file.filename"></span>
-                                            <button type="button" class="btn-close btn-close-white btn-sm ms-1" 
-                                                    @click="removeFile(file.id)"></button>
+                                    
+                                    <!-- Список загруженных файлов -->
+                                    <div class="mt-3" x-show="uploadedFiles.length > 0">
+                                        <div class="d-flex justify-content-between align-items-center mb-3">
+                                            <div class="d-flex align-items-center">
+                                                <i class="bi bi-folder-check text-success me-2"></i>
+                                                <span class="fw-bold text-dark">Загруженные файлы</span>
+                                                <span class="badge bg-success ms-2" x-text="uploadedFiles.length"></span>
+                                            </div>
+                                            <button type="button" class="btn btn-outline-danger btn-sm" @click="clearAllFiles()">
+                                                <i class="bi bi-trash"></i> Очистить все
+                                            </button>
                                         </div>
-                                    </template>
+                                        <div class="row g-2" style="max-height: 150px; overflow-y: auto;">
+                                            <template x-for="file in uploadedFiles" :key="file.id + '_' + (file.filename || '')">
+                                                <div class="col-12">
+                                                    <div class="card border-0 shadow-sm" 
+                                                         :class="{
+                                                             'border-success': file.status === 'ready',
+                                                             'border-warning': file.status === 'processing',
+                                                             'border-danger': file.status === 'error'
+                                                         }">
+                                                        <div class="card-body p-2">
+                                                            <div class="d-flex justify-content-between align-items-center">
+                                                                <div class="d-flex align-items-center flex-grow-1">
+                                                                    <div class="me-3">
+                                                                        <i class="bi bi-file-earmark-text text-primary fs-5" 
+                                                                           x-show="file.file_type === 'text'"></i>
+                                                                        <i class="bi bi-file-code text-info fs-5" 
+                                                                           x-show="file.file_type === 'code'"></i>
+                                                                        <i class="bi bi-file-pdf text-danger fs-5" 
+                                                                           x-show="file.file_type === 'pdf'"></i>
+                                                                        <i class="bi bi-file-image text-success fs-5" 
+                                                                           x-show="file.file_type === 'image'"></i>
+                                                                        <i class="bi bi-file-earmark fs-5 text-secondary" 
+                                                                           x-show="!['text', 'code', 'pdf', 'image'].includes(file.file_type)"></i>
+                                                                    </div>
+                                                                    <div class="flex-grow-1">
+                                                                        <div class="fw-bold text-dark small" x-ref="filename-{{ file.id }}" x-text="file.filename"></div>
+                                                                        <div class="text-muted" style="font-size: 0.75rem;">
+                                                                            <span x-show="file.file_type === 'text'">Текстовый файл</span>
+                                                                            <span x-show="file.file_type === 'code'">Код Python</span>
+                                                                            <span x-show="file.file_type === 'pdf'">PDF документ</span>
+                                                                            <span x-show="file.file_type === 'image'">Изображение</span>
+                                                                            <span x-show="!['text', 'code', 'pdf', 'image'].includes(file.file_type)">Файл</span>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                                <div class="d-flex align-items-center">
+                                                                    <span class="badge bg-success me-2" x-show="file.status === 'ready'">
+                                                                        <i class="bi bi-check-circle"></i> Готов
+                                                                    </span>
+                                                                    <span class="badge bg-warning me-2" x-show="file.status === 'processing'">
+                                                                        <i class="bi bi-hourglass-split"></i> Загрузка
+                                                                    </span>
+                                                                    <span class="badge bg-danger me-2" x-show="file.status === 'error'">
+                                                                        <i class="bi bi-x-circle"></i> Ошибка
+                                                                    </span>
+                                                                    <button type="button" class="btn btn-outline-danger btn-sm" 
+                                                                            @click="removeFile(file.id)" title="Удалить файл">
+                                                                        <i class="bi bi-x"></i>
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                             
@@ -158,7 +273,7 @@
                             
                             <div class="d-grid">
                                 <button class="btn btn-outline-primary" @click="applySettingsToBoth()">
-                                    <i class="bi bi-arrow-left-right"></i> Применить к обоим чатам
+                                    <i class="bi bi-arrow-left-right"></i> Применить ко всем чатам
                                 </button>
                             </div>
                         </div>
@@ -167,7 +282,7 @@
                         <div class="tab-pane fade" id="assistant2">
                             <div class="mb-3">
                                 <label class="form-label">Модель ИИ</label>
-                                <select class="form-select" x-model="compareSettings.model">
+                                <select class="form-select" x-model="compareSettings.model" @change="updateCompareSessionSettings()">
                                     {% model_options %}
                                 </select>
                             </div>
@@ -176,16 +291,16 @@
                                 <label class="form-label">
                                     Температура: <span x-text="compareSettings.temperature"></span>
                                 </label>
-                                <input type="range" class="form-range" min="0" max="2" step="0.1" 
-                                       x-model="compareSettings.temperature">
+                                <input type="range" class="form-range" min="0" max="2" step="0.01" 
+                                       x-model="compareSettings.temperature" @input="updateCompareSessionSettings()">
                             </div>
                             
                             <div class="mb-3">
                                 <label class="form-label">
                                     Top P: <span x-text="compareSettings.top_p"></span>
                                 </label>
-                                <input type="range" class="form-range" min="0" max="1" step="0.1" 
-                                       x-model="compareSettings.top_p">
+                                <input type="range" class="form-range" min="0" max="1" step="0.01" 
+                                       x-model="compareSettings.top_p" @input="updateCompareSessionSettings()">
                             </div>
                             
                             <div class="mb-3">
@@ -193,12 +308,36 @@
                                     Макс. токенов: <span x-text="compareSettings.max_tokens"></span>
                                 </label>
                                 <input type="range" class="form-range" min="100" max="8000" step="100" 
-                                       x-model="compareSettings.max_tokens">
+                                       x-model="compareSettings.max_tokens" @input="updateCompareSessionSettings()">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" 
+                                           x-model="compareSettings.web_search" 
+                                           @change="updateCompareSessionSettings()"
+                                           id="webSearch2">
+                                    <label class="form-check-label" for="webSearch2">
+                                        <i class="bi bi-search"></i> Поиск
+                                    </label>
+                                </div>
                             </div>
                             
                             <div class="mb-3">
                                 <label class="form-label">Системный промпт</label>
-                                <textarea class="form-control" rows="4" x-model="compareSettings.system_prompt"></textarea>
+                                <div class="d-flex gap-2 mb-2">
+                                    <button type="button" class="btn btn-outline-success btn-sm" @click="saveSystemPrompt2()">
+                                        <i class="bi bi-save"></i> Сохранить в ассистенте
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" @click="loadSystemPrompt2()">
+                                        <i class="bi bi-arrow-clockwise"></i> Загрузить из ассистента
+                                    </button>
+                                    <button type="button" class="btn btn-outline-danger btn-sm" @click="clearSystemPrompt2()">
+                                        <i class="bi bi-trash"></i> Очистить
+                                    </button>
+                                </div>
+                                <textarea class="form-control" rows="4" x-model="compareSettings.system_prompt" 
+                                          placeholder="Введите системный промпт для ассистента..."></textarea>
                             </div>
                             
                             <div class="mb-3">
@@ -217,15 +356,76 @@
                                     </button>
                                     <p class="small text-muted mt-2 mb-0">или перетащите файл сюда</p>
                                     <small class="text-muted">Поддерживаются: .txt (текст), .py (Python), .pdf (документы), .jpg/.jpeg/.png/.gif (изображения)</small>
-                                </div>
-                                <div class="mt-2" x-show="compareUploadedFiles.length > 0">
-                                    <template x-for="file in compareUploadedFiles" :key="file.id">
-                                        <div class="badge bg-secondary me-1">
-                                            <span x-text="file.filename"></span>
-                                            <button type="button" class="btn-close btn-close-white btn-sm ms-1" 
-                                                    @click="removeCompareFile(file.id)"></button>
+                                    
+                                    <!-- Список загруженных файлов для сравнения -->
+                                    <div class="mt-3" x-show="compareUploadedFiles.length > 0">
+                                        <div class="d-flex justify-content-between align-items-center mb-3">
+                                            <div class="d-flex align-items-center">
+                                                <i class="bi bi-folder-check text-success me-2"></i>
+                                                <span class="fw-bold text-dark">Загруженные файлы</span>
+                                                <span class="badge bg-success ms-2" x-text="compareUploadedFiles.length"></span>
+                                            </div>
+                                            <button type="button" class="btn btn-outline-danger btn-sm" @click="clearAllCompareFiles()">
+                                                <i class="bi bi-trash"></i> Очистить все
+                                            </button>
                                         </div>
-                                    </template>
+                                        <div class="row g-2" style="max-height: 150px; overflow-y: auto;">
+                                            <template x-for="file in compareUploadedFiles" :key="file.id + '_' + (file.filename || '')">
+                                                <div class="col-12">
+                                                    <div class="card border-0 shadow-sm" 
+                                                         :class="{
+                                                             'border-success': file.status === 'ready',
+                                                             'border-warning': file.status === 'processing',
+                                                             'border-danger': file.status === 'error'
+                                                         }">
+                                                        <div class="card-body p-2">
+                                                            <div class="d-flex justify-content-between align-items-center">
+                                                                <div class="d-flex align-items-center flex-grow-1">
+                                                                    <div class="me-3">
+                                                                        <i class="bi bi-file-earmark-text text-primary fs-5" 
+                                                                           x-show="file.file_type === 'text'"></i>
+                                                                        <i class="bi bi-file-code text-info fs-5" 
+                                                                           x-show="file.file_type === 'code'"></i>
+                                                                        <i class="bi bi-file-pdf text-danger fs-5" 
+                                                                           x-show="file.file_type === 'pdf'"></i>
+                                                                        <i class="bi bi-file-image text-success fs-5" 
+                                                                           x-show="file.file_type === 'image'"></i>
+                                                                        <i class="bi bi-file-earmark fs-5 text-secondary" 
+                                                                           x-show="!['text', 'code', 'pdf', 'image'].includes(file.file_type)"></i>
+                                                                    </div>
+                                                                    <div class="flex-grow-1">
+                                                                        <div class="fw-bold text-dark small" x-ref="filename-{{ file.id }}" x-text="file.filename"></div>
+                                                                        <div class="text-muted" style="font-size: 0.75rem;">
+                                                                            <span x-show="file.file_type === 'text'">Текстовый файл</span>
+                                                                            <span x-show="file.file_type === 'code'">Код Python</span>
+                                                                            <span x-show="file.file_type === 'pdf'">PDF документ</span>
+                                                                            <span x-show="file.file_type === 'image'">Изображение</span>
+                                                                            <span x-show="!['text', 'code', 'pdf', 'image'].includes(file.file_type)">Файл</span>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                                <div class="d-flex align-items-center">
+                                                                    <span class="badge bg-success me-2" x-show="file.status === 'ready'">
+                                                                        <i class="bi bi-check-circle"></i> Готов
+                                                                    </span>
+                                                                    <span class="badge bg-warning me-2" x-show="file.status === 'processing'">
+                                                                        <i class="bi bi-hourglass-split"></i> Загрузка
+                                                                    </span>
+                                                                    <span class="badge bg-danger me-2" x-show="file.status === 'error'">
+                                                                        <i class="bi bi-x-circle"></i> Ошибка
+                                                                    </span>
+                                                                    <button type="button" class="btn btn-outline-danger btn-sm" 
+                                                                            @click="removeCompareFile(file.id)" title="Удалить файл">
+                                                                        <i class="bi bi-x"></i>
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                             
@@ -254,58 +454,144 @@
                         <div class="tab-pane fade" id="assistant3">
                             <div class="mb-3">
                                 <label class="form-label">Модель</label>
-                                <select class="form-select" x-model="compare2Settings.model">
+                                <select class="form-select" x-model="compare2Settings.model" @change="updateCompare2SessionSettings()">
                                     {% model_options %}
                                 </select>
                             </div>
                             
                             <div class="mb-3">
                                 <label class="form-label">Температура: <span x-text="compare2Settings.temperature"></span></label>
-                                <input type="range" class="form-range" min="0" max="2" step="0.1" x-model="compare2Settings.temperature">
+                                <input type="range" class="form-range" min="0" max="2" step="0.01" x-model="compare2Settings.temperature" @input="updateCompare2SessionSettings()">
                             </div>
                             
                             <div class="mb-3">
-                                <label class="form-label">Top P</label>
-                                <input type="number" class="form-control" min="0" max="1" step="0.1" x-model="compare2Settings.top_p">
+                                <label class="form-label">Top P: <span x-text="compare2Settings.top_p"></span></label>
+                                <input type="range" class="form-range" min="0" max="1" step="0.01" x-model="compare2Settings.top_p" @input="updateCompare2SessionSettings()">
                             </div>
                             
                             <div class="mb-3">
-                                <label class="form-label">Макс. токенов</label>
-                                <input type="number" class="form-control" min="100" max="8000" step="100" x-model="compare2Settings.max_tokens">
+                                <label class="form-label">Макс. токенов: <span x-text="compare2Settings.max_tokens"></span></label>
+                                <input type="range" class="form-range" min="100" max="8000" step="100" x-model="compare2Settings.max_tokens" @input="updateCompare2SessionSettings()">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" 
+                                           x-model="compare2Settings.web_search" 
+                                           @change="updateCompare2SessionSettings()"
+                                           id="webSearch3">
+                                    <label class="form-check-label" for="webSearch3">
+                                        <i class="bi bi-search"></i> Поиск
+                                    </label>
+                                </div>
                             </div>
                             
                             <div class="mb-3">
                                 <label class="form-label">Системный промпт</label>
-                                <textarea class="form-control" rows="3" x-model="compare2Settings.system_prompt"></textarea>
+                                <div class="d-flex gap-2 mb-2">
+                                    <button type="button" class="btn btn-outline-success btn-sm" @click="saveSystemPrompt3()">
+                                        <i class="bi bi-save"></i> Сохранить в ассистенте
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" @click="loadSystemPrompt3()">
+                                        <i class="bi bi-arrow-clockwise"></i> Загрузить из ассистента
+                                    </button>
+                                    <button type="button" class="btn btn-outline-danger btn-sm" @click="clearSystemPrompt3()">
+                                        <i class="bi bi-trash"></i> Очистить
+                                    </button>
+                                </div>
+                                <textarea class="form-control" rows="3" x-model="compare2Settings.system_prompt" 
+                                          placeholder="Введите системный промпт для ассистента..."></textarea>
                             </div>
                             
                             <!-- File Upload for Compare 2 -->
                             <div class="mb-3">
                                 <label class="form-label">Загрузить файлы</label>
-                                <div class="border rounded p-3" 
+                                <div class="border rounded p-3 text-center" 
                                      @drop.prevent="handleCompare2Drop($event)"
                                      @dragover.prevent="dragOver = true"
-                                     @dragleave.prevent="dragOver = false">
+                                     @dragleave.prevent="dragOver = false"
+                                     :class="{ 'bg-light': dragOver }">
                                     <input type="file" 
                                            id="compare2FileInput" 
-                                           class="form-control mb-2" 
+                                           class="d-none" 
                                            multiple 
                                            accept=".txt,.py,.pdf,.jpg,.jpeg,.png,.gif"
                                            @change="handleCompare2FileSelect($event)">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" 
+                                            @click="document.getElementById('compare2FileInput').click()">
+                                        <i class="bi bi-paperclip"></i> Выбрать файлы
+                                    </button>
+                                    <p class="small text-muted mt-2 mb-0">или перетащите файлы сюда</p>
                                     <small class="text-muted">Поддерживаются: .txt (текст), .py (Python), .pdf (документы), .jpg/.jpeg/.png/.gif (изображения)</small>
                                     
-                                    <div class="mt-2" x-show="compare2UploadedFiles.length > 0">
-                                        <strong>Загруженные файлы:</strong>
-                                        <ul class="list-group mt-2">
-                                            <template x-for="file in compare2UploadedFiles" :key="file.id">
-                                                <li class="list-group-item d-flex justify-content-between align-items-center">
-                                                    <span x-text="file.name"></span>
-                                                    <button class="btn btn-sm btn-danger" @click="removeCompare2File(file.id)">
-                                                        <i class="bi bi-trash"></i>
-                                                    </button>
-                                                </li>
+                                    <!-- Список загруженных файлов для сравнения 2 -->
+                                    <div class="mt-3" x-show="compare2UploadedFiles.length > 0">
+                                        <div class="d-flex justify-content-between align-items-center mb-3">
+                                            <div class="d-flex align-items-center">
+                                                <i class="bi bi-folder-check text-success me-2"></i>
+                                                <span class="fw-bold text-dark">Загруженные файлы</span>
+                                                <span class="badge bg-success ms-2" x-text="compare2UploadedFiles.length"></span>
+                                            </div>
+                                            <button type="button" class="btn btn-outline-danger btn-sm" @click="clearAllCompare2Files()">
+                                                <i class="bi bi-trash"></i> Очистить все
+                                            </button>
+                                        </div>
+                                        <div class="row g-2" style="max-height: 150px; overflow-y: auto;">
+                                            <template x-for="file in compare2UploadedFiles" :key="file.id + '_' + (file.filename || file.name || '')">
+                                                <div class="col-12">
+                                                    <div class="card border-0 shadow-sm" 
+                                                         :class="{
+                                                             'border-success': file.status === 'ready',
+                                                             'border-warning': file.status === 'processing',
+                                                             'border-danger': file.status === 'error'
+                                                         }">
+                                                        <div class="card-body p-2">
+                                                            <div class="d-flex justify-content-between align-items-center">
+                                                                <div class="d-flex align-items-center flex-grow-1">
+                                                                    <div class="me-3">
+                                                                        <i class="bi bi-file-earmark-text text-primary fs-5" 
+                                                                           x-show="file.file_type === 'text'"></i>
+                                                                        <i class="bi bi-file-code text-info fs-5" 
+                                                                           x-show="file.file_type === 'code'"></i>
+                                                                        <i class="bi bi-file-pdf text-danger fs-5" 
+                                                                           x-show="file.file_type === 'pdf'"></i>
+                                                                        <i class="bi bi-file-image text-success fs-5" 
+                                                                           x-show="file.file_type === 'image'"></i>
+                                                                        <i class="bi bi-file-earmark fs-5 text-secondary" 
+                                                                           x-show="!['text', 'code', 'pdf', 'image'].includes(file.file_type)"></i>
+                                                                    </div>
+                                                                    <div class="flex-grow-1">
+                                                                        <div class="fw-bold text-dark small" x-ref="filename-{{ file.id }}" x-text="file.filename"></div>
+                                                                        <div class="text-muted" style="font-size: 0.75rem;">
+                                                                            <span x-show="file.file_type === 'text'">Текстовый файл</span>
+                                                                            <span x-show="file.file_type === 'code'">Код Python</span>
+                                                                            <span x-show="file.file_type === 'pdf'">PDF документ</span>
+                                                                            <span x-show="file.file_type === 'image'">Изображение</span>
+                                                                            <span x-show="!['text', 'code', 'pdf', 'image'].includes(file.file_type)">Файл</span>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                                <div class="d-flex align-items-center">
+                                                                    <span class="badge bg-success me-2" x-show="file.status === 'ready'">
+                                                                        <i class="bi bi-check-circle"></i> Готов
+                                                                    </span>
+                                                                    <span class="badge bg-warning me-2" x-show="file.status === 'processing'">
+                                                                        <i class="bi bi-hourglass-split"></i> Загрузка
+                                                                    </span>
+                                                                    <span class="badge bg-danger me-2" x-show="file.status === 'error'">
+                                                                        <i class="bi bi-x-circle"></i> Ошибка
+                                                                    </span>
+                                                                    <button type="button" class="btn btn-outline-danger btn-sm" 
+                                                                            @click="removeCompare2File(file.id)" title="Удалить файл">
+                                                                        <i class="bi bi-x"></i>
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             </template>
-                                        </ul>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -542,6 +828,11 @@
                         <button class="btn btn-sm btn-success" @click="newChat()">
                             <i class="bi bi-plus-circle"></i> Новый чат
                         </button>
+                        <button class="btn btn-sm btn-info ms-2" @click="toggleWebSearchForAll()" 
+                                :class="{'btn-success': allWebSearchEnabled, 'btn-outline-info': !allWebSearchEnabled}">
+                            <i class="bi bi-search"></i> 
+                            <span x-text="allWebSearchEnabled ? 'Поиск ВКЛ' : 'Поиск ВЫКЛ'"></span>
+                        </button>
                         <div class="form-check form-switch d-inline-block ms-3" x-show="compareMode || compare2Mode">
                             <input class="form-check-input" type="checkbox" x-model="applyToBoth" id="applyToBoth">
                             <label class="form-check-label" for="applyToBoth">
@@ -552,8 +843,8 @@
                     <div class="input-group">
                         <textarea class="form-control" rows="2" 
                                   x-model="currentMessage" 
-                                  @keydown.ctrl.enter="sendMessage()"
-                                  placeholder="Введите ваше сообщение... (Ctrl+Enter для отправки)"></textarea>
+                                  @keydown.enter="handleEnterKey($event)"
+                                  placeholder="Введите ваше сообщение... (Enter для отправки, Shift+Enter для новой строки)"></textarea>
                         <button class="btn btn-primary" @click="sendMessage()" 
                                 :disabled="!currentMessage.trim() || isLoading">
                             <i class="bi bi-send" x-show="!isLoading"></i>
@@ -571,6 +862,11 @@
                     <div class="mb-2">
                         <button class="btn btn-sm btn-success" @click="newCompareChat()">
                             <i class="bi bi-plus-circle"></i> Новый чат
+                        </button>
+                        <button class="btn btn-sm btn-info ms-2" @click="toggleWebSearchForCompare()" 
+                                :class="{'btn-success': compareWebSearchEnabled, 'btn-outline-info': !compareWebSearchEnabled}">
+                            <i class="bi bi-search"></i> 
+                            <span x-text="compareWebSearchEnabled ? 'Поиск ВКЛ' : 'Поиск ВЫКЛ'"></span>
                         </button>
                     </div>
                     <div class="input-group">
@@ -596,6 +892,11 @@
                         <button class="btn btn-sm btn-success" @click="newCompare2Chat()">
                             <i class="bi bi-plus-circle"></i> Новый чат
                         </button>
+                        <button class="btn btn-sm btn-info ms-2" @click="toggleWebSearchForCompare2()" 
+                                :class="{'btn-success': compare2WebSearchEnabled, 'btn-outline-info': !compare2WebSearchEnabled}">
+                            <i class="bi bi-search"></i> 
+                            <span x-text="compare2WebSearchEnabled ? 'Поиск ВКЛ' : 'Поиск ВЫКЛ'"></span>
+                        </button>
                     </div>
                     <div class="input-group">
                         <textarea class="form-control" rows="2" 
@@ -615,8 +916,8 @@
     </div>
     
     <!-- Modal Backdrop -->
-    <div class="modal-backdrop fade" :class="{ 'show': showSaveAgentModal1 || showSaveAgentModal2 || showSaveAgentModal3 }" 
-         x-show="showSaveAgentModal1 || showSaveAgentModal2 || showSaveAgentModal3"></div>
+    <div class="modal-backdrop fade" :class="{ 'show': showSaveAgentModal1 || showSaveAgentModal2 || showSaveAgentModal3 || showAddFunctionModal }" 
+         x-show="showSaveAgentModal1 || showSaveAgentModal2 || showSaveAgentModal3 || showAddFunctionModal"></div>
     
     <!-- Save Agent Modal 1 -->
     <div class="modal fade" :class="{ 'show d-block': showSaveAgentModal1 }" 
@@ -744,6 +1045,87 @@
             </div>
         </div>
     </div>
+    
+    <!-- Add Function Modal -->
+    <div class="modal fade" :class="{ 'show d-block': showAddFunctionModal }" 
+         tabindex="-1" x-show="showAddFunctionModal"
+         @click.self="showAddFunctionModal = false">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Добавить Python функцию</h5>
+                    <button type="button" class="btn-close" @click="showAddFunctionModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <form @submit.prevent="addFunction()">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="functionName" class="form-label">Название функции</label>
+                                    <input type="text" class="form-control" id="functionName" 
+                                           x-model="newFunction.name" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="functionDescription" class="form-label">Описание</label>
+                                    <input type="text" class="form-control" id="functionDescription" 
+                                           x-model="newFunction.description">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="jsonDefinition" class="form-label">JSON определение функции</label>
+                            <textarea class="form-control" id="jsonDefinition" rows="6" 
+                                      x-model="newFunction.jsonDefinition" 
+                                      placeholder='{
+  "name": "function_name",
+  "description": "Описание функции",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "param1": {
+        "type": "string",
+        "description": "Описание параметра"
+      }
+    },
+    "required": ["param1"]
+  }
+}'></textarea>
+                            <small class="form-text text-muted">
+                                Определение функции в формате OpenAI Function Calling
+                            </small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="pythonCode" class="form-label">Python код функции</label>
+                            <textarea class="form-control" id="pythonCode" rows="8" 
+                                      x-model="newFunction.pythonCode" 
+                                      placeholder="def function_name(param1):
+    '''
+    Описание функции
+    '''
+    # Ваш код здесь
+    result = f&quot;Обработано: {param1}&quot;
+    return result"></textarea>
+                            <small class="form-text text-muted">
+                                Python код функции, который будет выполняться
+                            </small>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @click="showAddFunctionModal = false">
+                        Отмена
+                    </button>
+                    <button type="button" class="btn btn-primary" @click="addFunction()">
+                        Добавить функцию
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
@@ -756,28 +1138,48 @@ function playgroundApp() {
             temperature: 0.7,
             top_p: 1.0,
             max_tokens: 4000,
-            system_prompt: ''
+            system_prompt: '',
+            web_search: false
         },
         compareSettings: {
             model: 'yandexgpt',
             temperature: 0.7,
             top_p: 1.0,
             max_tokens: 4000,
-            system_prompt: ''
+            system_prompt: '',
+            web_search: false
         },
         compare2Settings: {
-            model: 'GigaChat-Pro:latest',
+            model: 'GigaChat:latest',
             temperature: 0.7,
             top_p: 1.0,
             max_tokens: 4000,
-            system_prompt: ''
+            system_prompt: '',
+            web_search: false
         },
         sessionId: null,
+        compareSessionId: null,
+        compare2SessionId: null,
         messages: [],
         compareMessages: [],
         compare2Messages: [],
+        // Состояние поиска для каждого чата
+        allWebSearchEnabled: false,
+        compareWebSearchEnabled: false,
+        compare2WebSearchEnabled: false,
         currentMessage: '',
         compareMessage: '',
+        showAddFunctionModal: false,
+        currentFunctions: [],
+        newFunction: {
+            name: '',
+            description: '',
+            jsonDefinition: '',
+            pythonCode: ''
+        },
+        currentAgentId: null,
+        compareAgentId: null,
+        compare2AgentId: null,
         compare2Message: '',
         isLoading: false,
         compareLoading: false,
@@ -989,15 +1391,100 @@ function playgroundApp() {
                     temperature: this.settings.temperature,
                     top_p: this.settings.top_p,
                     max_tokens: this.settings.max_tokens,
-                    system_prompt: this.settings.system_prompt
+                    system_prompt: this.settings.system_prompt,
+                    web_search: this.settings.web_search,
+                    functions: this.currentFunctions
                 })
             });
             const data = await response.json();
             if (data.success) {
                 this.sessionId = data.session.session_id;
-                console.log('Session created:', this.sessionId);
+                console.log('Session created with model:', this.settings.model);
             } else {
                 console.error('Failed to create session:', data.error);
+            }
+        },
+        
+        async updateSessionSettings() {
+            try {
+                // Обновляем настройки через ChatManager
+                const settings = ChatFactory.createSettings(
+                    this.settings.model,
+                    this.settings.temperature,
+                    this.settings.top_p,
+                    this.settings.max_tokens,
+                    this.settings.system_prompt,
+                    this.settings.web_search,
+                    this.currentFunctions
+                );
+                
+                await this.chatManager.updateSettings('main', settings);
+                console.log('Main session settings updated successfully');
+            } catch (error) {
+                console.error('Error updating session settings:', error);
+            }
+        },
+
+        async updateAllSessions() {
+            try {
+                // Обновляем настройки для всех чатов
+                const mainSettings = ChatFactory.createSettings(
+                    this.settings.model,
+                    this.settings.temperature,
+                    this.settings.top_p,
+                    this.settings.max_tokens,
+                    this.settings.system_prompt,
+                    this.settings.web_search,
+                    this.currentFunctions
+                );
+                
+                const compareSettings = ChatFactory.createSettings(
+                    this.compareSettings.model,
+                    this.compareSettings.temperature,
+                    this.compareSettings.top_p,
+                    this.compareSettings.max_tokens,
+                    this.compareSettings.system_prompt,
+                    this.compareSettings.web_search,
+                    this.currentFunctions
+                );
+                
+                const compare2Settings = ChatFactory.createSettings(
+                    this.compare2Settings.model,
+                    this.compare2Settings.temperature,
+                    this.compare2Settings.top_p,
+                    this.compare2Settings.max_tokens,
+                    this.compare2Settings.system_prompt,
+                    this.compare2Settings.web_search,
+                    this.currentFunctions
+                );
+                
+                // Обновляем настройки в ChatManager
+                await this.chatManager.updateSettings('main', mainSettings);
+                await this.chatManager.updateSettings('compare', compareSettings);
+                await this.chatManager.updateSettings('compare2', compare2Settings);
+                
+                // Обновляем все сессии на сервере
+                const results = await this.chatManager.updateAllSessions();
+                console.log('All sessions updated:', results);
+                
+                // Синхронизируем состояние поиска
+                this.allWebSearchEnabled = this.settings.web_search;
+                this.compareWebSearchEnabled = this.compareSettings.web_search;
+                this.compare2WebSearchEnabled = this.compare2Settings.web_search;
+                
+            } catch (error) {
+                console.error('Error updating all sessions:', error);
+            }
+        },
+        
+        handleEnterKey(event) {
+            if (event.shiftKey) {
+                // Shift+Enter - разрешаем новую строку (стандартное поведение)
+                return;
+            } else {
+                // Enter - отправляем сообщение
+                event.preventDefault();
+                this.sendMessage();
             }
         },
         
@@ -1008,22 +1495,8 @@ function playgroundApp() {
             this.currentMessage = '';
             this.isLoading = true;
             
-            // Проверяем наличие CSRF токена
-            const csrftoken = this.getCSRFToken();
-            if (!csrftoken) {
-                this.isLoading = false;
-                return;
-            }
-            
             // Уведомление о принятии запроса
             this.showNotification('Запрос принят, отправляем на обработку...', 'info');
-            
-            this.messages.push({
-                id: Date.now(),
-                role: 'user',
-                content: message,
-                timestamp: new Date().toISOString()
-            });
             
             this.scrollToBottom();
             
@@ -1031,64 +1504,54 @@ function playgroundApp() {
                 // Уведомление о начале обработки
                 this.showNotification('Запрос обрабатывается ИИ...', 'info');
                 
-                // Если нет сессии, создаем новую
-                if (!this.sessionId) {
-                    this.showNotification('Создаем новую сессию...', 'info');
-                    await this.loadSession();
-                    
-                    // Проверяем, что сессия создалась
-                    if (!this.sessionId) {
-                        this.showNotification('Ошибка создания сессии', 'error');
-                        this.isLoading = false;
-                        return;
-                    }
-                }
+                // Обновляем настройки перед отправкой сообщения
+                const settings = ChatFactory.createSettings(
+                    this.settings.model,
+                    this.settings.temperature,
+                    this.settings.top_p,
+                    this.settings.max_tokens,
+                    this.settings.system_prompt,
+                    this.settings.web_search,
+                    this.currentFunctions
+                );
                 
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 секунд таймаут
+                await this.chatManager.updateSettings('main', settings);
                 
-                const response = await fetch('/playground/api/send-message/', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': csrftoken,
-                        'Cache-Control': 'no-cache'
-                    },
-                    body: JSON.stringify({
-                        session_id: this.sessionId,
-                        message: message
-                    }),
-                    signal: controller.signal
+                // Принудительно обновляем настройки на сервере
+                await this.chatManager.forceUpdateSessionSettings('main');
+                
+                // Логируем настройки для отладки
+                console.log('Sending message with settings:', {
+                    model: this.settings.model,
+                    web_search: this.settings.web_search,
+                    system_prompt: this.settings.system_prompt ? 'present' : 'empty'
                 });
                 
-                clearTimeout(timeoutId);
+                // Отправляем сообщение через ChatManager
+                const assistant_message = await this.chatManager.sendMessage('main', message);
                 
-                const data = await response.json();
-                if (data.success) {
-                    // Уведомление об успешном получении ответа
-                    this.showNotification('Ответ получен и добавлен в чат!', 'success');
-                    this.messages.push({
-                        id: Date.now() + 1,
-                        role: 'assistant',
-                        content: data.assistant_message.content,
-                        timestamp: data.assistant_message.timestamp,
-                        token_stats: data.assistant_message.token_stats
-                    });
-                    
-                    if (data.session_stats) {
-                        this.sessionStats = data.session_stats;
-                    }
-                    
-                    // Отправляем сообщения в compare чаты
-                    if (this.compareMode && this.applyToBoth) {
-                        await this.sendCompareMessage(message);
-                    }
-                    
-                    if (this.compare2Mode && this.applyToBoth) {
-                        await this.sendCompare2Message(message);
-                    }
-                } else {
-                    this.showNotification('Ошибка при обработке запроса: ' + (data.error || 'Неизвестная ошибка'), 'error');
+                // Обновляем UI
+                this.messages = this.chatManager.getSession('main').messages;
+                
+                // Обновляем статистику
+                const session = this.chatManager.getSession('main');
+                if (session.stats) {
+                    this.sessionStats = session.stats;
+                }
+                
+                // Обновляем sessionId
+                this.sessionId = session.session_id;
+                
+                // Уведомление об успешном получении ответа
+                this.showNotification('Ответ получен и добавлен в чат!', 'success');
+                
+                // Отправляем сообщения в compare чаты
+                if (this.compareMode && this.applyToBoth) {
+                    await this.sendCompareMessage(message);
+                }
+                
+                if (this.compare2Mode && this.applyToBoth) {
+                    await this.sendCompare2Message(message);
                 }
             } catch (error) {
                 console.error('Error:', error);
@@ -1105,83 +1568,145 @@ function playgroundApp() {
             }
         },
         
-        async sendCompareMessage(message) {
-            if (!message || this.compareLoading) return;
+        // Функции для управления поиском
+        toggleWebSearchForAll() {
+            this.allWebSearchEnabled = !this.allWebSearchEnabled;
+            this.settings.web_search = this.allWebSearchEnabled;
+            this.updateAllSessions();
+            this.showNotification(
+                this.allWebSearchEnabled ? 'Поиск включен для основного чата' : 'Поиск выключен для основного чата', 
+                this.allWebSearchEnabled ? 'success' : 'info'
+            );
+        },
+        
+        toggleWebSearchForCompare() {
+            this.compareWebSearchEnabled = !this.compareWebSearchEnabled;
+            this.compareSettings.web_search = this.compareWebSearchEnabled;
+            this.updateAllSessions();
+            this.showNotification(
+                this.compareWebSearchEnabled ? 'Поиск включен для второго чата' : 'Поиск выключен для второго чата', 
+                this.compareWebSearchEnabled ? 'success' : 'info'
+            );
+        },
+        
+        toggleWebSearchForCompare2() {
+            this.compare2WebSearchEnabled = !this.compare2WebSearchEnabled;
+            this.compare2Settings.web_search = this.compare2WebSearchEnabled;
+            this.updateAllSessions();
+            this.showNotification(
+                this.compare2WebSearchEnabled ? 'Поиск включен для третьего чата' : 'Поиск выключен для третьего чата', 
+                this.compare2WebSearchEnabled ? 'success' : 'info'
+            );
+        },
+        
+        // Функции для обновления настроек сессий чатов сравнения
+        async updateCompareSessionSettings() {
+            if (!this.compareSessionId) return;
             
             const csrftoken = this.getCSRFToken();
-            if (!csrftoken) {
-                return;
+            if (!csrftoken) return;
+            
+            try {
+                const response = await fetch('/playground/api/update-session/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrftoken
+                    },
+                    body: JSON.stringify({
+                        session_id: this.compareSessionId,
+                        model: this.compareSettings.model,
+                        temperature: parseFloat(this.compareSettings.temperature),
+                        top_p: parseFloat(this.compareSettings.top_p),
+                        max_tokens: parseInt(this.compareSettings.max_tokens),
+                        system_prompt: this.compareSettings.system_prompt,
+                        web_search: this.compareSettings.web_search
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    console.log('Compare session settings updated successfully');
+                }
+            } catch (error) {
+                console.error('Error updating compare session settings:', error);
             }
+        },
+        
+        async updateCompare2SessionSettings() {
+            if (!this.compare2SessionId) return;
+            
+            const csrftoken = this.getCSRFToken();
+            if (!csrftoken) return;
+            
+            try {
+                const response = await fetch('/playground/api/update-session/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrftoken
+                    },
+                    body: JSON.stringify({
+                        session_id: this.compare2SessionId,
+                        model: this.compare2Settings.model,
+                        temperature: parseFloat(this.compare2Settings.temperature),
+                        top_p: parseFloat(this.compare2Settings.top_p),
+                        max_tokens: parseInt(this.compare2Settings.max_tokens),
+                        system_prompt: this.compare2Settings.system_prompt,
+                        web_search: this.compare2Settings.web_search
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    console.log('Compare2 session settings updated successfully');
+                }
+            } catch (error) {
+                console.error('Error updating compare2 session settings:', error);
+            }
+        },
+        
+        async sendCompareMessage(message) {
+            if (!message || this.compareLoading) return;
             
             this.compareLoading = true;
             this.showNotification('Отправляем запрос во второй чат...', 'info');
             
-            // Добавляем сообщение пользователя в compare чат
-            this.compareMessages.push({
-                id: Date.now() + 0.1,
-                role: 'user',
-                content: message,
-                timestamp: new Date().toISOString()
-            });
-            
             try {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 60000);
+                // Обновляем настройки перед отправкой сообщения
+                const settings = ChatFactory.createSettings(
+                    this.compareSettings.model,
+                    this.compareSettings.temperature,
+                    this.compareSettings.top_p,
+                    this.compareSettings.max_tokens,
+                    this.compareSettings.system_prompt,
+                    this.compareSettings.web_search,
+                    this.currentFunctions
+                );
                 
-                const sessionResponse = await fetch('/playground/api/create-session/', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': csrftoken,
-                        'Cache-Control': 'no-cache'
-                    },
-                    body: JSON.stringify({
-                        model: this.compareSettings.model,
-                        temperature: this.compareSettings.temperature,
-                        top_p: this.compareSettings.top_p,
-                        max_tokens: this.compareSettings.max_tokens,
-                        system_prompt: this.compareSettings.system_prompt
-                    }),
-                    signal: controller.signal
-                });
+                await this.chatManager.updateSettings('compare', settings);
                 
-                const sessionData = await sessionResponse.json();
+                // Принудительно обновляем настройки на сервере
+                await this.chatManager.forceUpdateSessionSettings('compare');
                 
-                const response = await fetch('/playground/api/send-message/', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': csrftoken,
-                        'Cache-Control': 'no-cache'
-                    },
-                    body: JSON.stringify({
-                        session_id: sessionData.session.session_id,
-                        message: message
-                    }),
-                    signal: controller.signal
-                });
+                // Отправляем сообщение через ChatManager
+                const assistant_message = await this.chatManager.sendMessage('compare', message);
                 
-                clearTimeout(timeoutId);
+                // Обновляем UI
+                this.compareMessages = this.chatManager.getSession('compare').messages;
                 
-                const data = await response.json();
-                if (data.success) {
-                    this.showNotification('Ответ получен во втором чате!', 'success');
-                    this.compareMessages.push({
-                        id: Date.now() + 2,
-                        role: 'assistant',
-                        content: data.assistant_message.content,
-                        timestamp: data.assistant_message.timestamp,
-                        token_stats: data.assistant_message.token_stats
-                    });
-                    
-                    if (data.session_stats) {
-                        this.compareSessionStats = data.session_stats;
-                    }
-                } else {
-                    this.showNotification('Ошибка во втором чате: ' + (data.error || 'Неизвестная ошибка'), 'error');
+                // Обновляем статистику
+                const session = this.chatManager.getSession('compare');
+                if (session.stats) {
+                    this.compareSessionStats = session.stats;
                 }
+                
+                // Обновляем compareSessionId
+                this.compareSessionId = session.session_id;
+                
+                this.showNotification('Ответ получен во втором чате!', 'success');
             } catch (error) {
-                console.error('Error:', error);
+                console.error('Compare chat error:', error);
                 if (error.name === 'AbortError') {
                     this.showNotification('Таймаут запроса во втором чате (60 сек)', 'warning');
                 } else if (error.name === 'TypeError' && error.message.includes('fetch')) {
@@ -1230,24 +1755,34 @@ function playgroundApp() {
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 60000);
                 
-                const sessionResponse = await fetch('/playground/api/create-session/', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': csrftoken,
-                        'Cache-Control': 'no-cache'
-                    },
-                    body: JSON.stringify({
-                        model: this.compare2Settings.model,
-                        temperature: this.compare2Settings.temperature,
-                        top_p: this.compare2Settings.top_p,
-                        max_tokens: this.compare2Settings.max_tokens,
-                        system_prompt: this.compare2Settings.system_prompt
-                    }),
-                    signal: controller.signal
-                });
-                
-                const sessionData = await sessionResponse.json();
+                // Если нет сессии для сравнения 2, создаем новую
+                if (!this.compare2SessionId) {
+                    const sessionResponse = await fetch('/playground/api/create-session/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': csrftoken,
+                            'Cache-Control': 'no-cache'
+                        },
+                        body: JSON.stringify({
+                            model: this.compare2Settings.model,
+                            temperature: this.compare2Settings.temperature,
+                            top_p: this.compare2Settings.top_p,
+                            max_tokens: this.compare2Settings.max_tokens,
+                            system_prompt: this.compare2Settings.system_prompt,
+                            web_search: this.compare2Settings.web_search,
+                            functions: this.currentFunctions
+                        }),
+                        signal: controller.signal
+                    });
+                    
+                    const sessionData = await sessionResponse.json();
+                    if (sessionData.success) {
+                        this.compare2SessionId = sessionData.session_id;
+                    } else {
+                        throw new Error(sessionData.error || 'Failed to create session');
+                    }
+                }
                 
                 const response = await fetch('/playground/api/send-message/', {
                     method: 'POST',
@@ -1257,8 +1792,9 @@ function playgroundApp() {
                         'Cache-Control': 'no-cache'
                     },
                     body: JSON.stringify({
-                        session_id: sessionData.session.session_id,
-                        message: message
+                        session_id: this.compare2SessionId,
+                        message: message,
+                        functions: this.currentFunctions
                     }),
                     signal: controller.signal
                 });
@@ -1449,6 +1985,36 @@ function playgroundApp() {
             this.showNotification(`Загружаем ${files.length} файл(ов)...`, 'info');
             
             for (let file of files) {
+                // Добавляем файл со статусом "processing"
+                const tempFileInfo = {
+                    id: 'temp_' + Date.now() + '_' + Math.random(),
+                    filename: file.name,
+                    name: file.name, // Добавляем и name для совместимости
+                    status: 'processing'
+                };
+                
+                if (chatType === 'compare') {
+                    this.compareUploadedFiles.push(tempFileInfo);
+                } else if (chatType === 'compare2') {
+                    this.compare2UploadedFiles.push(tempFileInfo);
+                } else {
+                    this.uploadedFiles.push(tempFileInfo);
+                }
+                
+                // Сразу устанавливаем название файла в DOM
+                this.$nextTick(() => {
+                    const filenameElement = this.$refs[`filename-${tempFileInfo.id}`];
+                    if (filenameElement) {
+                        filenameElement.innerHTML = tempFileInfo.filename || tempFileInfo.name || 'Загрузка...';
+                        console.log('Set initial filename:', filenameElement.innerHTML);
+                    }
+                });
+                
+                // Создаем sessionId если его нет
+                if (!this.sessionId) {
+                    this.sessionId = 'temp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                }
+                
                 const formData = new FormData();
                 formData.append('file', file);
                 formData.append('session_id', this.sessionId);
@@ -1469,31 +2035,131 @@ function playgroundApp() {
                     clearTimeout(timeoutId);
                     
                     const data = await response.json();
+                    console.log('Response data:', data); // Отладка
                     if (data.success) {
                         const fileInfo = {
-                            id: data.file.file_id,
+                            id: data.file.id,
                             filename: data.file.filename,
+                            name: data.file.filename, // Добавляем name для совместимости
                             file_type: data.file.file_type
                         };
                         
+                        console.log('Created fileInfo:', fileInfo); // Отладка
+                        console.log('File filename:', fileInfo.filename); // Отладка
+                        console.log('File name property:', fileInfo.name); // Отладка
+                        console.log('Filename length:', fileInfo.filename ? fileInfo.filename.length : 'null');
+                        console.log('Filename charCodes:', fileInfo.filename ? Array.from(fileInfo.filename).map(c => c.charCodeAt(0)) : 'null');
+                        
+                        // Заменяем временный файл на реальный
+                        fileInfo.status = 'ready';
+                        
                         if (chatType === 'compare') {
-                            this.compareUploadedFiles.push(fileInfo);
+                            const index = this.compareUploadedFiles.findIndex(f => f.id === tempFileInfo.id);
+                            if (index !== -1) {
+                                Object.assign(this.compareUploadedFiles[index], fileInfo);
+                                this.compareUploadedFiles = [...this.compareUploadedFiles];
+                            }
                         } else if (chatType === 'compare2') {
-                            this.compare2UploadedFiles.push(fileInfo);
+                            const index = this.compare2UploadedFiles.findIndex(f => f.id === tempFileInfo.id);
+                            if (index !== -1) {
+                                Object.assign(this.compare2UploadedFiles[index], fileInfo);
+                                this.compare2UploadedFiles = [...this.compare2UploadedFiles];
+                            }
                         } else {
-                            this.uploadedFiles.push(fileInfo);
+                            const index = this.uploadedFiles.findIndex(f => f.id === tempFileInfo.id);
+                            if (index !== -1) {
+                                // Принудительно обновляем объект файла
+                                Object.assign(this.uploadedFiles[index], fileInfo);
+                                // Триггерим обновление Alpine.js
+                                this.uploadedFiles = [...this.uploadedFiles];
+                                console.log('Updated uploadedFiles array:', this.uploadedFiles); // Отладка
+                            }
                         }
                         
                         this.showNotification(`Файл "${fileInfo.filename}" успешно загружен!`, 'success');
+                        
+                        // Принудительно обновляем DOM
+                        this.$nextTick(() => {
+                            console.log('DOM updated, checking filename display...');
+                            // Принудительно обновляем отображение filename
+                            setTimeout(() => {
+                                const filenameElement = this.$refs[`filename-${fileInfo.id}`];
+                                if (filenameElement) {
+                                    // Принудительно очищаем и устанавливаем содержимое
+                                    filenameElement.textContent = '';
+                                    filenameElement.textContent = fileInfo.filename || 'NO FILENAME';
+                                    console.log('Force updated filename element:', filenameElement.textContent);
+                                } else {
+                                    console.log('Filename element not found for ID:', fileInfo.id);
+                                    // Попробуем найти элемент по другому способу
+                                    const allElements = document.querySelectorAll('[x-ref^="filename-"]');
+                                    console.log('All filename elements found:', allElements.length);
+                                    allElements.forEach(el => {
+                                        if (el.getAttribute('x-ref') === `filename-${fileInfo.id}`) {
+                                            el.textContent = '';
+                                            el.textContent = fileInfo.filename || 'NO FILENAME';
+                                            console.log('Found and updated element:', el.textContent);
+                                        }
+                                    });
+                                }
+                            }, 100);
+                        });
                     } else {
-                        this.showNotification(`Ошибка загрузки файла: ${data.error}`, 'error');
+                        // Обновляем статус на ошибку
+                        if (chatType === 'compare') {
+                            const index = this.compareUploadedFiles.findIndex(f => f.id === tempFileInfo.id);
+                            if (index !== -1) {
+                                this.compareUploadedFiles[index].status = 'error';
+                            }
+                        } else if (chatType === 'compare2') {
+                            const index = this.compare2UploadedFiles.findIndex(f => f.id === tempFileInfo.id);
+                            if (index !== -1) {
+                                this.compare2UploadedFiles[index].status = 'error';
+                            }
+                        } else {
+                            const index = this.uploadedFiles.findIndex(f => f.id === tempFileInfo.id);
+                            if (index !== -1) {
+                                this.uploadedFiles[index].status = 'error';
+                            }
+                        }
+                        
+                        // Показываем более понятное сообщение об ошибке
+                        let errorMessage = data.error;
+                        if (data.error === 'Session not found') {
+                            errorMessage = 'Сессия не найдена. Попробуйте отправить сообщение сначала.';
+                        } else if (data.error === 'Unsupported file type') {
+                            errorMessage = 'Неподдерживаемый тип файла. Поддерживаются: .txt, .py, .pdf, .jpg, .jpeg, .png, .gif';
+                        } else if (data.error.includes('File too large')) {
+                            errorMessage = 'Файл слишком большой. Максимальный размер: 10MB';
+                        }
+                        
+                        this.showNotification(`Ошибка загрузки файла: ${errorMessage}`, 'error');
                     }
                 } catch (error) {
                     console.error('Upload error:', error);
+                    
+                    // Обновляем статус на ошибку
+                    if (chatType === 'compare') {
+                        const index = this.compareUploadedFiles.findIndex(f => f.id === tempFileInfo.id);
+                        if (index !== -1) {
+                            this.compareUploadedFiles[index].status = 'error';
+                        }
+                    } else if (chatType === 'compare2') {
+                        const index = this.compare2UploadedFiles.findIndex(f => f.id === tempFileInfo.id);
+                        if (index !== -1) {
+                            this.compare2UploadedFiles[index].status = 'error';
+                        }
+                    } else {
+                        const index = this.uploadedFiles.findIndex(f => f.id === tempFileInfo.id);
+                        if (index !== -1) {
+                            this.uploadedFiles[index].status = 'error';
+                        }
+                    }
+                    
                     if (error.name === 'AbortError') {
                         this.showNotification(`Таймаут загрузки файла "${file.name}" (30 сек)`, 'warning');
                     } else if (error.name === 'TypeError' && error.message.includes('fetch')) {
-                        this.showNotification(`Ошибка сети при загрузке "${file.name}"`, 'error');
+                        this.showNotification(`Ошибка сети при загрузке "${file.name}". Проверьте подключение к интернету.`, 'error');
                     } else {
                         this.showNotification(`Ошибка загрузки файла "${file.name}": ${error.message}`, 'error');
                     }
@@ -1513,17 +2179,32 @@ function playgroundApp() {
             this.compare2UploadedFiles = this.compare2UploadedFiles.filter(f => f.id !== fileId);
         },
         
-        // Apply settings to both chats
+        // Apply settings to all chats
         applySettingsToBoth() {
+            // Применяем настройки ко второму чату
             this.compareSettings = {
                 model: this.settings.model,
                 temperature: this.settings.temperature,
                 top_p: this.settings.top_p,
                 max_tokens: this.settings.max_tokens,
-                system_prompt: this.settings.system_prompt
+                system_prompt: this.settings.system_prompt,
+                web_search: this.settings.web_search
             };
             this.compareUploadedFiles = [...this.uploadedFiles];
-            this.showNotification('Настройки применены к обоим чатам!', 'success');
+            
+            // Применяем настройки к третьему чату
+            this.compare2Settings = {
+                model: this.settings.model,
+                temperature: this.settings.temperature,
+                top_p: this.settings.top_p,
+                max_tokens: this.settings.max_tokens,
+                system_prompt: this.settings.system_prompt,
+                web_search: this.settings.web_search
+            };
+            this.compare2UploadedFiles = [...this.uploadedFiles];
+            
+            this.updateAllSessions();
+            this.showNotification('Настройки применены ко всем чатам!', 'success');
         },
         
         // Copy settings from Assistant 1 to Assistant 2
@@ -1533,9 +2214,11 @@ function playgroundApp() {
                 temperature: this.settings.temperature,
                 top_p: this.settings.top_p,
                 max_tokens: this.settings.max_tokens,
-                system_prompt: this.settings.system_prompt
+                system_prompt: this.settings.system_prompt,
+                web_search: this.settings.web_search
             };
             this.compareUploadedFiles = [...this.uploadedFiles];
+            this.updateAllSessions();
             alert('Настройки скопированы из Ассистента 1');
         },
         
@@ -1545,9 +2228,11 @@ function playgroundApp() {
                 temperature: this.settings.temperature,
                 top_p: this.settings.top_p,
                 max_tokens: this.settings.max_tokens,
-                system_prompt: this.settings.system_prompt
+                system_prompt: this.settings.system_prompt,
+                web_search: this.settings.web_search
             };
             this.compare2UploadedFiles = [...this.uploadedFiles];
+            this.updateAllSessions();
             alert('Настройки скопированы из Ассистента 1');
         },
         
@@ -1623,6 +2308,7 @@ function playgroundApp() {
                 
                 const data = await response.json();
                 if (data.success) {
+                    this.currentAgentId = data.agent.id;
                     this.showSaveAgentModal1 = false;
                     this.newAgent1 = { name: '', description: '' };
                     if (data.updated) {
@@ -1666,6 +2352,7 @@ function playgroundApp() {
                 
                 const data = await response.json();
                 if (data.success) {
+                    this.compareAgentId = data.agent.id;
                     this.showSaveAgentModal2 = false;
                     this.newAgent2 = { name: '', description: '' };
                     if (data.updated) {
@@ -1708,6 +2395,7 @@ function playgroundApp() {
                 
                 const data = await response.json();
                 if (data.success) {
+                    this.compare2AgentId = data.agent.id;
                     this.showSaveAgentModal3 = false;
                     this.newAgent3 = { name: '', description: '' };
                     if (data.updated) {
@@ -1723,8 +2411,407 @@ function playgroundApp() {
             } finally {
                 this.isCreatingAgent3 = false;
             }
+        },
+        
+        addFunction() {
+            if (!this.newFunction.name || !this.newFunction.jsonDefinition || !this.newFunction.pythonCode) {
+                alert('Заполните все обязательные поля');
+                return;
+            }
+            
+            try {
+                // Проверяем JSON
+                const jsonDef = JSON.parse(this.newFunction.jsonDefinition);
+                
+                // Добавляем функцию в список
+                this.currentFunctions.push({
+                    name: this.newFunction.name,
+                    description: this.newFunction.description,
+                    json_definition: jsonDef,
+                    python_code: this.newFunction.pythonCode
+                });
+                
+                // Очищаем форму
+                this.newFunction = {
+                    name: '',
+                    description: '',
+                    jsonDefinition: '',
+                    pythonCode: ''
+                };
+                
+                // Закрываем модальное окно
+                this.showAddFunctionModal = false;
+                
+            } catch (e) {
+                alert('Неверный JSON формат в определении функции');
+            }
+        },
+        
+        removeFunction(index) {
+            this.currentFunctions.splice(index, 1);
+        },
+        
+        clearFunctions() {
+            if (confirm('Удалить все функции?')) {
+                this.currentFunctions = [];
+            }
+        },
+        
+        clearAllFiles() {
+            if (confirm('Удалить все загруженные файлы?')) {
+                this.uploadedFiles = [];
+            }
+        },
+        
+        clearAllCompareFiles() {
+            if (confirm('Удалить все загруженные файлы для сравнения?')) {
+                this.compareUploadedFiles = [];
+            }
+        },
+        
+        clearAllCompare2Files() {
+            if (confirm('Удалить все загруженные файлы для сравнения 2?')) {
+                this.compare2UploadedFiles = [];
+            }
+        },
+        
+        async saveSystemPrompt() {
+            // Для основного ассистента создаем ассистента автоматически, если его нет
+            if (!this.currentAgentId) {
+                try {
+                    const response = await fetch('/playground/api/agents/create/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': csrftoken
+                        },
+                        body: JSON.stringify({
+                            name: 'Основной ассистент',
+                            description: 'Основной ассистент для чата',
+                            model: this.settings.model,
+                            temperature: this.settings.temperature,
+                            top_p: this.settings.top_p,
+                            max_tokens: this.settings.max_tokens,
+                            system_prompt: this.settings.system_prompt
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    if (data.success) {
+                        this.currentAgentId = data.agent.id;
+                        this.showNotification('Ассистент создан и системный промпт сохранен', 'success');
+                        return;
+                    } else {
+                        this.showNotification(`Ошибка создания ассистента: ${data.error}`, 'error');
+                        return;
+                    }
+                } catch (error) {
+                    this.showNotification('Ошибка создания ассистента: ' + error.message, 'error');
+                    return;
+                }
+            }
+            
+            try {
+                const response = await fetch(`/playground/api/agents/${this.currentAgentId}/update/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrftoken
+                    },
+                    body: JSON.stringify({
+                        system_prompt: this.settings.system_prompt
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    this.showNotification('Системный промпт сохранен в ассистенте', 'success');
+                } else {
+                    this.showNotification('Ошибка сохранения: ' + data.error, 'error');
+                }
+            } catch (error) {
+                this.showNotification('Ошибка сохранения: ' + error.message, 'error');
+            }
+        },
+        
+        async loadSystemPrompt() {
+            if (!this.currentAgentId) {
+                this.showNotification('Нет сохраненного ассистента для загрузки', 'warning');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/playground/api/agents/${this.currentAgentId}/`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    this.settings.system_prompt = data.agent.system_prompt || '';
+                    this.showNotification('Системный промпт загружен из ассистента', 'success');
+                } else {
+                    this.showNotification('Ошибка загрузки: ' + data.error, 'error');
+                }
+            } catch (error) {
+                this.showNotification('Ошибка загрузки: ' + error.message, 'error');
+            }
+        },
+        
+        async saveSystemPrompt2() {
+            // Если ассистент для сравнения не выбран, создаем его автоматически
+            if (!this.compareAgentId) {
+                try {
+                    const response = await fetch('/playground/api/agents/create/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': csrftoken
+                        },
+                        body: JSON.stringify({
+                            name: 'Ассистент сравнения 1',
+                            description: 'Ассистент для сравнения',
+                            model: this.compareSettings.model,
+                            temperature: this.compareSettings.temperature,
+                            top_p: this.compareSettings.top_p,
+                            max_tokens: this.compareSettings.max_tokens,
+                            system_prompt: this.compareSettings.system_prompt
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    if (data.success) {
+                        this.compareAgentId = data.agent.id;
+                        this.showNotification('Ассистент сравнения создан и системный промпт сохранен', 'success');
+                        return;
+                    } else {
+                        this.showNotification(`Ошибка создания ассистента: ${data.error}`, 'error');
+                        return;
+                    }
+                } catch (error) {
+                    this.showNotification('Ошибка создания ассистента: ' + error.message, 'error');
+                    return;
+                }
+            }
+            
+            try {
+                const response = await fetch(`/playground/api/agents/${this.compareAgentId}/update/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrftoken
+                    },
+                    body: JSON.stringify({
+                        system_prompt: this.compareSettings.system_prompt
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    this.showNotification('Системный промпт сохранен в ассистенте сравнения', 'success');
+                } else {
+                    this.showNotification('Ошибка сохранения: ' + data.error, 'error');
+                }
+            } catch (error) {
+                this.showNotification('Ошибка сохранения: ' + error.message, 'error');
+            }
+        },
+        
+        async loadSystemPrompt2() {
+            if (!this.compareAgentId) {
+                this.showNotification('Нет сохраненного ассистента сравнения для загрузки', 'warning');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/playground/api/agents/${this.compareAgentId}/`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    this.compareSettings.system_prompt = data.agent.system_prompt || '';
+                    this.showNotification('Системный промпт загружен из ассистента сравнения', 'success');
+                } else {
+                    this.showNotification('Ошибка загрузки: ' + data.error, 'error');
+                }
+            } catch (error) {
+                this.showNotification('Ошибка загрузки: ' + error.message, 'error');
+            }
+        },
+        
+        async saveSystemPrompt3() {
+            // Если ассистент для сравнения не выбран, создаем его автоматически
+            if (!this.compare2AgentId) {
+                try {
+                    const response = await fetch('/playground/api/agents/create/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': csrftoken
+                        },
+                        body: JSON.stringify({
+                            name: 'Ассистент сравнения 2',
+                            description: 'Ассистент для сравнения',
+                            model: this.compare2Settings.model,
+                            temperature: this.compare2Settings.temperature,
+                            top_p: this.compare2Settings.top_p,
+                            max_tokens: this.compare2Settings.max_tokens,
+                            system_prompt: this.compare2Settings.system_prompt
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    if (data.success) {
+                        this.compare2AgentId = data.agent.id;
+                        this.showNotification('Ассистент сравнения 2 создан и системный промпт сохранен', 'success');
+                        return;
+                    } else {
+                        this.showNotification(`Ошибка создания ассистента: ${data.error}`, 'error');
+                        return;
+                    }
+                } catch (error) {
+                    this.showNotification('Ошибка создания ассистента: ' + error.message, 'error');
+                    return;
+                }
+            }
+            
+            try {
+                const response = await fetch(`/playground/api/agents/${this.compare2AgentId}/update/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrftoken
+                    },
+                    body: JSON.stringify({
+                        system_prompt: this.compare2Settings.system_prompt
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    this.showNotification('Системный промпт сохранен в ассистенте сравнения 2', 'success');
+                } else {
+                    this.showNotification('Ошибка сохранения: ' + data.error, 'error');
+                }
+            } catch (error) {
+                this.showNotification('Ошибка сохранения: ' + error.message, 'error');
+            }
+        },
+        
+        async loadSystemPrompt3() {
+            if (!this.compare2AgentId) {
+                this.showNotification('Нет сохраненного ассистента сравнения 2 для загрузки', 'warning');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/playground/api/agents/${this.compare2AgentId}/`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    this.compare2Settings.system_prompt = data.agent.system_prompt || '';
+                    this.showNotification('Системный промпт загружен из ассистента сравнения 2', 'success');
+                } else {
+                    this.showNotification('Ошибка загрузки: ' + data.error, 'error');
+                }
+            } catch (error) {
+                this.showNotification('Ошибка загрузки: ' + error.message, 'error');
+            }
+        },
+        
+        // Функции для очистки системных промптов
+        clearSystemPrompt() {
+            this.settings.system_prompt = '';
+            this.updateAllSessions();
+            this.showNotification('Системный промпт очищен', 'info');
+        },
+        
+        clearSystemPrompt2() {
+            this.compareSettings.system_prompt = '';
+            this.updateAllSessions();
+            this.showNotification('Системный промпт второго чата очищен', 'info');
+        },
+        
+        clearSystemPrompt3() {
+            this.compare2Settings.system_prompt = '';
+            this.updateAllSessions();
+            this.showNotification('Системный промпт третьего чата очищен', 'info');
+        },
+        
+        init() {
+            // Инициализируем ChatManager
+            this.chatManager = ChatFactory.createChatManager(this.getCSRFToken());
+            
+            // Синхронизируем состояние поиска
+            this.allWebSearchEnabled = this.settings.web_search;
+            this.compareWebSearchEnabled = this.compareSettings.web_search;
+            this.compare2WebSearchEnabled = this.compare2Settings.web_search;
+            
+            // Создаем сессии для всех чатов
+            this.chatManager.createChatSession('main', ChatFactory.createSettings(
+                this.settings.model,
+                this.settings.temperature,
+                this.settings.top_p,
+                this.settings.max_tokens,
+                this.settings.system_prompt,
+                this.settings.web_search,
+                this.currentFunctions
+            ));
+            
+            this.chatManager.createChatSession('compare', ChatFactory.createSettings(
+                this.compareSettings.model,
+                this.compareSettings.temperature,
+                this.compareSettings.top_p,
+                this.compareSettings.max_tokens,
+                this.compareSettings.system_prompt,
+                this.compareSettings.web_search,
+                this.currentFunctions
+            ));
+            
+            this.chatManager.createChatSession('compare2', ChatFactory.createSettings(
+                this.compare2Settings.model,
+                this.compare2Settings.temperature,
+                this.compare2Settings.top_p,
+                this.compare2Settings.max_tokens,
+                this.compare2Settings.system_prompt,
+                this.compare2Settings.web_search,
+                this.currentFunctions
+            ));
+            
+            // Загружаем ассистента из URL параметров
+            const urlParams = new URLSearchParams(window.location.search);
+            const assistantId = urlParams.get('assistant');
+            if (assistantId) {
+                this.loadAssistant(assistantId);
+            }
+        },
+        
+        async loadAssistant(assistantId) {
+            try {
+                const response = await fetch(`/playground/api/agents/${assistantId}/`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    const agent = data.agent;
+                    this.currentAgentId = agent.id;
+                    this.settings.model = agent.model;
+                    this.settings.temperature = agent.temperature;
+                    this.settings.top_p = agent.top_p;
+                    this.settings.max_tokens = agent.max_tokens;
+                    this.settings.system_prompt = agent.system_prompt || '';
+                    this.settings.web_search = agent.web_search || false;
+                    
+                    // Синхронизируем состояние поиска
+                    this.allWebSearchEnabled = this.settings.web_search;
+                    
+                    this.showNotification(`Загружен ассистент: ${agent.name}`, 'success');
+                } else {
+                    this.showNotification('Ошибка загрузки ассистента: ' + data.error, 'error');
+                }
+            } catch (error) {
+                this.showNotification('Ошибка загрузки ассистента: ' + error.message, 'error');
+            }
         }
     }
 }
 </script>
+
+<!-- Подключаем ChatManager -->
+<script src="{% static 'js/chat-manager.js' %}"></script>
 {% endblock %}

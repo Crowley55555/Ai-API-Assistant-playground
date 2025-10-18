@@ -195,3 +195,7 @@ from chat.model_config import AVAILABLE_MODELS
 # Session settings
 SESSION_COOKIE_AGE = 86400 * 30  # 30 days
 SESSION_SAVE_EVERY_REQUEST = True
+
+# Encoding settings
+DEFAULT_CHARSET = 'utf-8'
+FILE_CHARSET = 'utf-8'

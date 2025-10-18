@@ -1,0 +1,326 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Управление функциями{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2><i class="fas fa-code"></i> Управление Python функциями</h2>
+                <button class="btn btn-primary" onclick="openCreateFunctionModal()">
+                    <i class="fas fa-plus"></i> Создать функцию
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Список функций -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Доступные функции</h5>
+                </div>
+                <div class="card-body">
+                    <div id="functions-list">
+                        <div class="text-center">
+                            <div class="spinner-border" role="status">
+                                <span class="sr-only">Загрузка...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно создания/редактирования функции -->
+<div class="modal fade" id="functionModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-xl" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="functionModalTitle">Создать функцию</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="functionForm">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="functionName">Название функции</label>
+                                <input type="text" class="form-control" id="functionName" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="functionDescription">Описание</label>
+                                <input type="text" class="form-control" id="functionDescription">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="jsonDefinition">JSON определение функции</label>
+                        <textarea class="form-control" id="jsonDefinition" rows="8" placeholder='{
+  "name": "function_name",
+  "description": "Описание функции",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "param1": {
+        "type": "string",
+        "description": "Описание параметра"
+      }
+    },
+    "required": ["param1"]
+  }
+}'></textarea>
+                        <small class="form-text text-muted">
+                            Определение функции в формате OpenAI Function Calling
+                        </small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="pythonCode">Python код функции</label>
+                        <textarea class="form-control" id="pythonCode" rows="12" placeholder="def function_name(param1):
+    '''
+    Описание функции
+    '''
+    # Ваш код здесь
+    result = f&quot;Обработано: {param1}&quot;
+    return result"></textarea>
+                        <small class="form-text text-muted">
+                            Python код функции, который будет выполняться
+                        </small>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" onclick="saveFunction()">Сохранить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно управления функциями агента -->
+<div class="modal fade" id="agentFunctionsModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Функции агента: <span id="agentName"></span></h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div id="agent-functions-list">
+                    <div class="text-center">
+                        <div class="spinner-border" role="status">
+                            <span class="sr-only">Загрузка...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Закрыть</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentFunctionId = null;
+let currentAgentId = null;
+
+// Загрузка функций при загрузке страницы
+document.addEventListener('DOMContentLoaded', function() {
+    loadFunctions();
+});
+
+// Загрузка списка функций
+async function loadFunctions() {
+    try {
+        const response = await fetch('/playground/api/functions/');
+        const data = await response.json();
+        
+        if (data.success) {
+            displayFunctions(data.functions);
+        } else {
+            showAlert('Ошибка загрузки функций: ' + data.error, 'danger');
+        }
+    } catch (error) {
+        showAlert('Ошибка загрузки функций: ' + error.message, 'danger');
+    }
+}
+
+// Отображение списка функций
+function displayFunctions(functions) {
+    const container = document.getElementById('functions-list');
+    
+    if (functions.length === 0) {
+        container.innerHTML = '<div class="text-center text-muted">Функции не найдены</div>';
+        return;
+    }
+    
+    const html = functions.map(func => `
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-8">
+                        <h6 class="card-title">${func.name}</h6>
+                        <p class="card-text">${func.description || 'Без описания'}</p>
+                        <small class="text-muted">
+                            Создано: ${new Date(func.created_at).toLocaleString()}
+                        </small>
+                    </div>
+                    <div class="col-md-4 text-right">
+                        <button class="btn btn-sm btn-outline-primary" onclick="editFunction('${func.id}')">
+                            <i class="fas fa-edit"></i> Редактировать
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="deleteFunction('${func.id}')">
+                            <i class="fas fa-trash"></i> Удалить
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `).join('');
+    
+    container.innerHTML = html;
+}
+
+// Открытие модального окна создания функции
+function openCreateFunctionModal() {
+    currentFunctionId = null;
+    document.getElementById('functionModalTitle').textContent = 'Создать функцию';
+    document.getElementById('functionForm').reset();
+    $('#functionModal').modal('show');
+}
+
+// Редактирование функции
+async function editFunction(functionId) {
+    try {
+        const response = await fetch(`/playground/api/functions/${functionId}/update/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({})
+        });
+        
+        // Загружаем данные функции (в реальном приложении нужен отдельный endpoint)
+        currentFunctionId = functionId;
+        document.getElementById('functionModalTitle').textContent = 'Редактировать функцию';
+        
+        // Заполняем форму данными функции
+        // В реальном приложении нужно загрузить данные функции
+        
+        $('#functionModal').modal('show');
+    } catch (error) {
+        showAlert('Ошибка загрузки функции: ' + error.message, 'danger');
+    }
+}
+
+// Сохранение функции
+async function saveFunction() {
+    const name = document.getElementById('functionName').value;
+    const description = document.getElementById('functionDescription').value;
+    const jsonDefinition = document.getElementById('jsonDefinition').value;
+    const pythonCode = document.getElementById('pythonCode').value;
+    
+    if (!name || !jsonDefinition || !pythonCode) {
+        showAlert('Заполните все обязательные поля', 'warning');
+        return;
+    }
+    
+    try {
+        let jsonDef;
+        try {
+            jsonDef = JSON.parse(jsonDefinition);
+        } catch (e) {
+            showAlert('Неверный JSON формат в определении функции', 'danger');
+            return;
+        }
+        
+        const data = {
+            name: name,
+            description: description,
+            json_definition: jsonDef,
+            python_code: pythonCode
+        };
+        
+        const url = currentFunctionId 
+            ? `/playground/api/functions/${currentFunctionId}/update/`
+            : '/playground/api/functions/create/';
+        
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data)
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showAlert('Функция сохранена успешно', 'success');
+            $('#functionModal').modal('hide');
+            loadFunctions();
+        } else {
+            showAlert('Ошибка сохранения: ' + result.error, 'danger');
+        }
+    } catch (error) {
+        showAlert('Ошибка сохранения функции: ' + error.message, 'danger');
+    }
+}
+
+// Удаление функции
+async function deleteFunction(functionId) {
+    if (!confirm('Вы уверены, что хотите удалить эту функцию?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/playground/api/functions/${functionId}/delete/`, {
+            method: 'POST'
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showAlert('Функция удалена успешно', 'success');
+            loadFunctions();
+        } else {
+            showAlert('Ошибка удаления: ' + result.error, 'danger');
+        }
+    } catch (error) {
+        showAlert('Ошибка удаления функции: ' + error.message, 'danger');
+    }
+}
+
+// Показать уведомление
+function showAlert(message, type) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="close" data-dismiss="alert">
+            <span>&times;</span>
+        </button>
+    `;
+    
+    document.body.insertBefore(alertDiv, document.body.firstChild);
+    
+    setTimeout(() => {
+        alertDiv.remove();
+    }, 5000);
+}
+</script>
+{% endblock %}

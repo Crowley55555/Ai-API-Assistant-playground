@@ -1,6 +1,9 @@
 import tiktoken
 import re
+import logging
 from typing import Dict, List, Tuple
+
+logger = logging.getLogger(__name__)
 
 
 class TokenCounter:
@@ -23,24 +26,55 @@ class TokenCounter:
     def count_tokens(self, text: str, model: str = 'gpt-4') -> int:
         """Подсчитывает количество токенов в тексте для указанной модели."""
         try:
+            # Специальная обработка для Yandex GPT - более точный подсчет
+            if 'yandex' in model.lower():
+                # Для Yandex GPT используем более точный подсчет
+                # Примерно 1 токен = 4-5 символов для русского текста
+                # Учитываем, что русские слова короче английских
+                token_count = len(text) // 4.5
+                logger.info(f"Подсчет токенов для Yandex модели '{model}': {int(token_count)} токенов для текста длиной {len(text)} символов")
+                return int(token_count)
+            
+            # Специальная обработка для GigaChat - более точный подсчет
+            if 'gigachat' in model.lower():
+                # Для GigaChat используем более точный подсчет
+                # Примерно 1 токен = 4-5 символов для русского текста
+                token_count = len(text) // 4.5
+                logger.info(f"Подсчет токенов для GigaChat модели '{model}': {int(token_count)} токенов для текста длиной {len(text)} символов")
+                return int(token_count)
+            
             encoding = self.encodings.get(model, self.encodings['gpt-4'])
-            return len(encoding.encode(text))
+            token_count = len(encoding.encode(text))
+            logger.info(f"Подсчет токенов для модели '{model}': {token_count} токенов для текста длиной {len(text)} символов")
+            return token_count
         except Exception as e:
             # Fallback: приблизительный подсчет (1 токен ≈ 4 символа)
-            return len(text) // 4
+            fallback_count = len(text) // 4
+            logger.warning(f"Ошибка подсчета токенов для модели '{model}': {e}. Используем приблизительный подсчет: {fallback_count}")
+            return fallback_count
     
     def count_messages_tokens(self, messages: List[Dict[str, str]], model: str = 'gpt-4') -> int:
         """Подсчитывает общее количество токенов в списке сообщений."""
         total_tokens = 0
         
-        for message in messages:
-            # Токены для роли
-            total_tokens += self.count_tokens(message.get('role', ''), model)
-            # Токены для содержимого
-            total_tokens += self.count_tokens(message.get('content', ''), model)
-            # Дополнительные токены для форматирования (приблизительно)
-            total_tokens += 4
+        for i, message in enumerate(messages):
+            role = message.get('role', '')
+            content = message.get('content', '')
+            
+            # Считаем токены для роли и контента
+            role_tokens = self.count_tokens(role, model)
+            content_tokens = self.count_tokens(content, model)
+            
+            # Для каждого сообщения добавляем токены форматирования (примерно 3-4 токена)
+            message_tokens = role_tokens + content_tokens + 3
+            total_tokens += message_tokens
+            
+            logger.info(f"Сообщение {i+1}: роль='{role}' ({role_tokens} токенов), контент={len(content)} символов ({content_tokens} токенов), всего для сообщения: {message_tokens}")
         
+        # Добавляем токены для начала и конца разговора (примерно 2-3 токена)
+        total_tokens += 2
+        
+        logger.info(f"Общее количество токенов для {len(messages)} сообщений: {total_tokens}")
         return total_tokens
     
     def estimate_cost(self, input_tokens: int, output_tokens: int, model: str) -> Dict[str, float]:

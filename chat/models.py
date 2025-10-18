@@ -14,6 +14,7 @@ class ChatSession(models.Model):
     top_p = models.FloatField(default=1.0)
     max_tokens = models.PositiveIntegerField(default=4000)
     system_prompt = models.TextField(blank=True)
+    web_search = models.BooleanField(default=False, help_text="Включен ли поиск в интернете")
     python_functions = models.TextField(blank=True)
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
@@ -23,6 +24,14 @@ class ChatSession(models.Model):
     total_output_tokens = models.PositiveIntegerField(default=0, help_text="Общее количество выходных токенов")
     total_tokens = models.PositiveIntegerField(default=0, help_text="Общее количество токенов")
     total_estimated_cost = models.DecimalField(max_digits=10, decimal_places=6, default=0, help_text="Общая примерная стоимость")
+    
+    # Поле для связи с функциями
+    functions = models.ManyToManyField(
+        'PythonFunction', 
+        blank=True, 
+        related_name='chat_sessions',
+        help_text="Python функции, доступные в сессии"
+    )
     
     class Meta:
         ordering = ['-updated_at']
@@ -106,6 +115,67 @@ class UploadedFile(models.Model):
         return f"{self.filename} ({self.file_type})"
 
 
+class PythonFunction(models.Model):
+    """Модель для хранения Python функций для ассистентов."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=200, help_text="Название функции")
+    description = models.TextField(blank=True, help_text="Описание функции")
+    
+    # JSON определение функции (OpenAI function calling format)
+    json_definition = models.JSONField(help_text="JSON определение функции в формате OpenAI")
+    
+    # Python код функции
+    python_code = models.TextField(help_text="Python код функции")
+    
+    # Метаданные
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+    is_active = models.BooleanField(default=True, help_text="Активна ли функция")
+    
+    class Meta:
+        ordering = ['-updated_at']
+    
+    def __str__(self):
+        return f"{self.name} ({'активна' if self.is_active else 'неактивна'})"
+    
+    def get_function_info(self):
+        """Возвращает информацию о функции для API."""
+        return {
+            'id': str(self.id),
+            'name': self.name,
+            'description': self.description,
+            'json_definition': self.json_definition,
+            'python_code': self.python_code,
+            'is_active': self.is_active,
+            'created_at': self.created_at.isoformat(),
+        }
+    
+    def validate_function(self):
+        """Проверяет корректность функции."""
+        try:
+            # Проверяем JSON определение
+            if not isinstance(self.json_definition, dict):
+                return False, "JSON определение должно быть объектом"
+            
+            required_fields = ['name', 'description', 'parameters']
+            for field in required_fields:
+                if field not in self.json_definition:
+                    return False, f"Отсутствует обязательное поле: {field}"
+            
+            # Проверяем Python код (базовая проверка)
+            if not self.python_code.strip():
+                return False, "Python код не может быть пустым"
+            
+            # Проверяем, что функция содержит def
+            if 'def ' not in self.python_code:
+                return False, "Python код должен содержать определение функции"
+            
+            return True, "Функция корректна"
+            
+        except Exception as e:
+            return False, f"Ошибка валидации: {str(e)}"
+
+
 class Agent(models.Model):
     """Модель для хранения агентов с их настройками."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -118,6 +188,15 @@ class Agent(models.Model):
     top_p = models.FloatField(default=1.0, help_text="Top P")
     max_tokens = models.PositiveIntegerField(default=4000, help_text="Максимальное количество токенов")
     system_prompt = models.TextField(blank=True, help_text="Системный промпт")
+    web_search = models.BooleanField(default=False, help_text="Включен ли поиск в интернете")
+    
+    # Связь с функциями
+    functions = models.ManyToManyField(
+        PythonFunction, 
+        blank=True, 
+        related_name='agents',
+        help_text="Python функции, доступные агенту"
+    )
     
     # Метаданные
     created_at = models.DateTimeField(default=timezone.now)
@@ -169,6 +248,8 @@ class Agent(models.Model):
             'top_p': self.top_p,
             'max_tokens': self.max_tokens,
             'system_prompt': self.system_prompt,
+            'web_search': self.web_search,
+            'functions': [func.get_function_info() for func in self.functions.filter(is_active=True)],
         }
     
     def update_settings(self, **kwargs):
