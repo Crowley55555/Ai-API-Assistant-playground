@@ -23,7 +23,6 @@ class FileProcessor:
             '.json': 'json',
             '.csv': 'csv',
             '.md': 'markdown',
-            '.docx': 'document',
         }
     
     def process_file(self, file: UploadedFile) -> Tuple[str, str]:

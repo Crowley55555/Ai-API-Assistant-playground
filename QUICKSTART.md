@@ -48,9 +48,10 @@ http://localhost:8000
 1. Скопируйте `env.example` в `.env`
 2. Добавьте ваши API ключи:
 ```env
-PERPLEXITY_API_KEY=your-key-here
 GIGACHAT_API_KEY=your-key-here
+GIGACHAT_CLIENT_SECRET=your-key-here
 YANDEX_API_KEY=your-key-here
+YANDEX_FOLDER_ID=your-folder-id
 ```
 
 ## 📊 Функции токенизации
@@ -63,7 +64,7 @@ YANDEX_API_KEY=your-key-here
 
 ## 🎯 Основные возможности
 
-- **Множество моделей**: Perplexity, GigaChat, Yandex GPT
+- **Множество моделей**: GigaChat, YandexGPT
 - **Настройка параметров**: температура, top_p, системный промпт
 - **Сравнение моделей**: параллельное тестирование
 - **Загрузка файлов**: drag & drop интерфейс
