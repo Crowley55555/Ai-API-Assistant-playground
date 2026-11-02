@@ -64,7 +64,7 @@ def test_gigachat_auth():
         decoded_key = base64.b64decode(api_key).decode('utf-8')
         client_id, client_secret_decoded = decoded_key.split(':')
         print(f"Client ID: {client_id}")
-        print(f"Client Secret: {client_secret_decoded}")
+        print(f"Client Secret (decoded): {client_secret_decoded[:4]}...{client_secret_decoded[-4:]}" if client_secret_decoded else "Client Secret decoded: пусто")
     except Exception as e:
         print(f"Ошибка декодирования API key: {e}")
         return False
